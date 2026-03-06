@@ -1,6 +1,20 @@
 import ExcelJS from 'exceljs';
 import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
 
+// Colors
+const COLORS = {
+  primary: '2563EB',       // blue-600
+  primaryLight: 'DBEAFE',  // blue-100
+  white: 'FFFFFF',
+  dark: '1F2937',          // gray-800
+  gray: '6B7280',          // gray-500
+  grayLight: 'F3F4F6',     // gray-100
+  border: 'D1D5DB',        // gray-300
+  cautionBg: 'FEF3C7',    // amber-100
+  cautionText: 'B45309',  // amber-700
+  cautionBorder: 'F59E0B', // amber-400
+};
+
 function parseDataUrl(dataUrl: string): { base64: string; extension: 'png' | 'jpeg' } {
   const match = dataUrl.match(/^data:image\/(png|jpe?g|gif|webp);base64,(.+)$/);
   if (!match) return { base64: dataUrl, extension: 'png' };
@@ -22,71 +36,195 @@ function downloadBuffer(buffer: ArrayBuffer, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function setBorder(cell: ExcelJS.Cell, style: Partial<ExcelJS.Border> = { style: 'thin', color: { argb: COLORS.border } }) {
+  cell.border = { top: style, bottom: style, left: style, right: style };
+}
+
+function mergeFill(
+  sheet: ExcelJS.Worksheet,
+  row: number,
+  colStart: number,
+  colEnd: number,
+  value: string,
+  font: Partial<ExcelJS.Font>,
+  fill: ExcelJS.Fill | null,
+  alignment?: Partial<ExcelJS.Alignment>,
+) {
+  sheet.mergeCells(row, colStart, row, colEnd);
+  const cell = sheet.getCell(row, colStart);
+  cell.value = value;
+  cell.font = font;
+  if (fill) cell.fill = fill;
+  cell.alignment = { vertical: 'middle', wrapText: true, ...alignment };
+  // Apply border to all cells in the merged range
+  for (let c = colStart; c <= colEnd; c++) {
+    setBorder(sheet.getCell(row, c));
+  }
+}
+
 export async function exportToExcel(instruction: WorkInstruction): Promise<void> {
   const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('作業手順書', {
+    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1 },
+    properties: { showGridLines: false },
+  });
 
-  // Summary sheet
-  const summarySheet = wb.addWorksheet('概要');
-  summarySheet.columns = [{ width: 15 }, { width: 50 }];
-
-  summarySheet.addRow(['作業手順書']);
-  summarySheet.addRow([]);
-  summarySheet.addRow(['タイトル', instruction.title]);
-  summarySheet.addRow(['カテゴリ', CATEGORY_LABELS[instruction.category]]);
-  summarySheet.addRow(['概要', instruction.description]);
-  summarySheet.addRow(['作成日', new Date(instruction.createdAt).toLocaleDateString('ja-JP')]);
-  summarySheet.addRow(['更新日', new Date(instruction.updatedAt).toLocaleDateString('ja-JP')]);
-  summarySheet.addRow(['ステップ数', String(instruction.steps.length)]);
-
-  // Bold title
-  const titleCell = summarySheet.getCell('A1');
-  titleCell.font = { bold: true, size: 14 };
-
-  // Steps sheet
-  const stepsSheet = wb.addWorksheet('手順');
-  stepsSheet.columns = [
-    { header: 'ステップ番号', width: 12 },
-    { header: 'タイトル', width: 25 },
-    { header: '説明', width: 50 },
-    { header: '注意事項', width: 30 },
-    { header: '画像', width: 30 },
-    { header: '動画URL', width: 40 },
+  // Column widths: A(3) + B(12) + C(20) + D(20) + E(20) + F(12) = ~87 chars wide
+  ws.columns = [
+    { width: 3 },   // A: margin
+    { width: 14 },  // B: labels
+    { width: 22 },  // C: content
+    { width: 22 },  // D: content
+    { width: 22 },  // E: content
+    { width: 14 },  // F: dates/info
   ];
 
-  // Style header row
-  const headerRow = stepsSheet.getRow(1);
-  headerRow.font = { bold: true };
-  headerRow.alignment = { vertical: 'middle' };
+  let row = 1;
 
+  // ===== HEADER SECTION =====
+  // Title bar
+  ws.getRow(row).height = 40;
+  mergeFill(ws, row, 1, 6, instruction.title,
+    { bold: true, size: 18, color: { argb: COLORS.white } },
+    { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.primary } },
+    { horizontal: 'center' },
+  );
+  row++;
+
+  // Category / Date row
+  ws.getRow(row).height = 24;
+  ws.mergeCells(row, 1, row, 3);
+  const catCell = ws.getCell(row, 1);
+  catCell.value = `カテゴリ：${CATEGORY_LABELS[instruction.category]}`;
+  catCell.font = { size: 10, color: { argb: COLORS.dark } };
+  catCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.primaryLight } };
+  catCell.alignment = { vertical: 'middle' };
+  for (let c = 1; c <= 3; c++) setBorder(ws.getCell(row, c));
+
+  ws.mergeCells(row, 4, row, 6);
+  const dateCell = ws.getCell(row, 4);
+  const created = new Date(instruction.createdAt).toLocaleDateString('ja-JP');
+  const updated = new Date(instruction.updatedAt).toLocaleDateString('ja-JP');
+  dateCell.value = `作成：${created}　更新：${updated}`;
+  dateCell.font = { size: 9, color: { argb: COLORS.gray } };
+  dateCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.primaryLight } };
+  dateCell.alignment = { vertical: 'middle', horizontal: 'right' };
+  for (let c = 4; c <= 6; c++) setBorder(ws.getCell(row, c));
+  row++;
+
+  // Description
+  if (instruction.description) {
+    const descLines = Math.ceil(instruction.description.length / 40);
+    ws.getRow(row).height = Math.max(20, descLines * 16);
+    mergeFill(ws, row, 1, 6, instruction.description,
+      { size: 10, color: { argb: COLORS.dark } },
+      { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.grayLight } },
+    );
+    row++;
+  }
+
+  // Spacer
+  ws.getRow(row).height = 10;
+  row++;
+
+  // ===== STEPS SECTION =====
   const sortedSteps = [...instruction.steps].sort((a, b) => a.orderIndex - b.orderIndex);
-  const IMAGE_HEIGHT = 150; // pixels
-  const ROW_HEIGHT_POINTS = IMAGE_HEIGHT * 0.75; // Excel uses points (1pt = 1.333px)
 
-  for (const step of sortedSteps) {
-    const row = stepsSheet.addRow([
-      step.orderIndex + 1,
-      step.title,
-      step.description,
-      step.caution || '',
-      '', // image placeholder
-      step.videoUrl || '',
-    ]);
+  for (let i = 0; i < sortedSteps.length; i++) {
+    const step = sortedSteps[i];
 
-    row.alignment = { vertical: 'top', wrapText: true };
+    // Step header bar
+    ws.getRow(row).height = 28;
+    mergeFill(ws, row, 1, 6, `  STEP ${i + 1}    ${step.title}`,
+      { bold: true, size: 12, color: { argb: COLORS.white } },
+      { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.primary } },
+    );
+    row++;
 
+    // Description
+    if (step.description) {
+      const lines = Math.ceil(step.description.length / 45);
+      ws.getRow(row).height = Math.max(30, lines * 18);
+      mergeFill(ws, row, 1, 6, step.description,
+        { size: 10, color: { argb: COLORS.dark } },
+        { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.white } },
+      );
+      row++;
+    }
+
+    // Caution
+    if (step.caution) {
+      const cautionLines = Math.ceil(step.caution.length / 40);
+      ws.getRow(row).height = Math.max(26, cautionLines * 16);
+      mergeFill(ws, row, 1, 6, `⚠ ${step.caution}`,
+        { size: 10, bold: true, color: { argb: COLORS.cautionText } },
+        { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.cautionBg } },
+      );
+      // Caution border
+      for (let c = 1; c <= 6; c++) {
+        ws.getCell(row, c).border = {
+          top: { style: 'thin', color: { argb: COLORS.cautionBorder } },
+          bottom: { style: 'thin', color: { argb: COLORS.cautionBorder } },
+          left: { style: 'thin', color: { argb: COLORS.cautionBorder } },
+          right: { style: 'thin', color: { argb: COLORS.cautionBorder } },
+        };
+      }
+      row++;
+    }
+
+    // Image
     if (step.imageDataUrl) {
+      const IMAGE_H = 200;
+      const IMAGE_W = 340;
+      ws.getRow(row).height = IMAGE_H * 0.75 + 10;
+
+      ws.mergeCells(row, 1, row, 6);
+      const imgCell = ws.getCell(row, 1);
+      imgCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.white } };
+      imgCell.alignment = { vertical: 'middle', horizontal: 'center' };
+      for (let c = 1; c <= 6; c++) setBorder(ws.getCell(row, c));
+
       const { base64, extension } = parseDataUrl(step.imageDataUrl);
       const imageId = wb.addImage({ base64, extension });
-
-      const rowIndex = row.number - 1; // 0-based for addImage
-      stepsSheet.addImage(imageId, {
-        tl: { col: 4, row: rowIndex },
-        ext: { width: 200, height: IMAGE_HEIGHT },
+      ws.addImage(imageId, {
+        tl: { col: 1.5, row: row - 1 + 0.1 },
+        ext: { width: IMAGE_W, height: IMAGE_H },
       });
+      row++;
+    }
 
-      row.height = ROW_HEIGHT_POINTS;
+    // Video URL
+    if (step.videoUrl) {
+      ws.getRow(row).height = 22;
+      mergeFill(ws, row, 1, 6, `動画：${step.videoUrl}`,
+        { size: 9, color: { argb: COLORS.primary }, underline: true },
+        { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.white } },
+      );
+      ws.getCell(row, 1).value = {
+        text: `動画：${step.videoUrl}`,
+        hyperlink: step.videoUrl,
+      } as ExcelJS.CellHyperlinkValue;
+      row++;
+    }
+
+    // Spacer between steps
+    if (i < sortedSteps.length - 1) {
+      ws.getRow(row).height = 8;
+      row++;
     }
   }
+
+  // Footer
+  row++;
+  ws.getRow(row).height = 20;
+  ws.mergeCells(row, 1, row, 6);
+  const footerCell = ws.getCell(row, 1);
+  footerCell.value = `全 ${sortedSteps.length} ステップ`;
+  footerCell.font = { size: 9, color: { argb: COLORS.gray }, italic: true };
+  footerCell.alignment = { horizontal: 'right', vertical: 'middle' };
+
+  // Print area
+  ws.pageSetup.printArea = `A1:F${row}`;
 
   const buffer = await wb.xlsx.writeBuffer();
   downloadBuffer(buffer as ArrayBuffer, `${instruction.title}_手順書.xlsx`);
@@ -94,30 +232,80 @@ export async function exportToExcel(instruction: WorkInstruction): Promise<void>
 
 export async function exportAllToExcel(instructions: WorkInstruction[]): Promise<void> {
   const wb = new ExcelJS.Workbook();
-  const sheet = wb.addWorksheet('手順書一覧');
+  const ws = wb.addWorksheet('手順書一覧', {
+    properties: { showGridLines: false },
+  });
 
-  sheet.columns = [
-    { header: 'タイトル', width: 30 },
-    { header: 'カテゴリ', width: 15 },
-    { header: '概要', width: 50 },
-    { header: 'ステップ数', width: 12 },
-    { header: '作成日', width: 15 },
-    { header: '更新日', width: 15 },
+  ws.columns = [
+    { width: 4 },   // No.
+    { width: 30 },  // タイトル
+    { width: 14 },  // カテゴリ
+    { width: 45 },  // 概要
+    { width: 10 },  // ステップ数
+    { width: 14 },  // 作成日
+    { width: 14 },  // 更新日
   ];
 
-  const headerRow = sheet.getRow(1);
-  headerRow.font = { bold: true };
+  // Title
+  let row = 1;
+  ws.getRow(row).height = 35;
+  ws.mergeCells(row, 1, row, 7);
+  const titleCell = ws.getCell(row, 1);
+  titleCell.value = '作業手順書一覧';
+  titleCell.font = { bold: true, size: 16, color: { argb: COLORS.white } };
+  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.primary } };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  row++;
 
-  for (const inst of instructions) {
-    sheet.addRow([
+  // Header
+  const headers = ['No.', 'タイトル', 'カテゴリ', '概要', 'ステップ数', '作成日', '更新日'];
+  ws.getRow(row).height = 24;
+  headers.forEach((h, i) => {
+    const cell = ws.getCell(row, i + 1);
+    cell.value = h;
+    cell.font = { bold: true, size: 10, color: { argb: COLORS.dark } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.primaryLight } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    setBorder(cell);
+  });
+  row++;
+
+  // Data rows
+  instructions.forEach((inst, i) => {
+    const isEven = i % 2 === 0;
+    const bgColor = isEven ? COLORS.white : COLORS.grayLight;
+    const values = [
+      i + 1,
       inst.title,
       CATEGORY_LABELS[inst.category],
       inst.description,
       inst.steps.length,
       new Date(inst.createdAt).toLocaleDateString('ja-JP'),
       new Date(inst.updatedAt).toLocaleDateString('ja-JP'),
-    ]);
-  }
+    ];
+    ws.getRow(row).height = 22;
+    values.forEach((v, ci) => {
+      const cell = ws.getCell(row, ci + 1);
+      cell.value = v;
+      cell.font = { size: 10, color: { argb: COLORS.dark } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+      cell.alignment = {
+        vertical: 'middle',
+        wrapText: true,
+        horizontal: ci === 0 || ci === 4 ? 'center' : 'left',
+      };
+      setBorder(cell);
+    });
+    row++;
+  });
+
+  // Footer count
+  row++;
+  ws.mergeCells(row, 1, row, 7);
+  const footerCell = ws.getCell(row, 1);
+  footerCell.value = `合計：${instructions.length} 件`;
+  footerCell.font = { size: 9, color: { argb: COLORS.gray }, italic: true };
+  footerCell.alignment = { horizontal: 'right' };
 
   const buffer = await wb.xlsx.writeBuffer();
   downloadBuffer(buffer as ArrayBuffer, '作業手順書一覧.xlsx');
