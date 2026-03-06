@@ -7,6 +7,7 @@ import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
 import { getInstruction, deleteInstruction } from '@/lib/storage';
 import { exportToPdf } from '@/lib/exportPdf';
 import { exportToExcel } from '@/lib/exportSpreadsheet';
+import { exportToWord } from '@/lib/exportWord';
 
 function getYouTubeEmbedUrl(url: string): string | null {
   try {
@@ -95,6 +96,12 @@ function InstructionViewContent() {
           className="px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 rounded text-sm hover:bg-green-100 transition"
         >
           Excel出力
+        </button>
+        <button
+          onClick={() => exportToWord(instruction)}
+          className="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded text-sm hover:bg-blue-100 transition"
+        >
+          Word出力
         </button>
         <Link
           href={`/instructions/edit?id=${instruction.id}`}
