@@ -84,7 +84,7 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
     };
 
     saveInstruction(instruction);
-    router.push(`/instructions/${instruction.id}`);
+    router.push(`/instructions/view?id=${instruction.id}`);
   };
 
   return (

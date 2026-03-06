@@ -102,7 +102,7 @@ export default function HomePage() {
               key={inst.id}
               className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition overflow-hidden"
             >
-              <Link href={`/instructions/${inst.id}`} className="block p-4">
+              <Link href={`/instructions/view?id=${inst.id}`} className="block p-4">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <h2 className="font-bold text-gray-800 line-clamp-2">{inst.title}</h2>
                   <span
@@ -125,7 +125,7 @@ export default function HomePage() {
               </Link>
               <div className="border-t border-gray-100 px-4 py-2 flex justify-end gap-2 no-print">
                 <Link
-                  href={`/instructions/${inst.id}/edit`}
+                  href={`/instructions/edit?id=${inst.id}`}
                   className="text-xs text-blue-600 hover:text-blue-800"
                 >
                   編集

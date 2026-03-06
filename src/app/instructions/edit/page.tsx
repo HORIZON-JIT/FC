@@ -1,23 +1,25 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { WorkInstruction } from '@/types/instruction';
 import { getInstruction } from '@/lib/storage';
 import InstructionForm from '@/components/InstructionForm';
 
-export default function EditInstructionPage() {
-  const params = useParams();
+function EditInstructionContent() {
+  const searchParams = useSearchParams();
   const [instruction, setInstruction] = useState<WorkInstruction | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const id = params.id as string;
-    const data = getInstruction(id);
-    setInstruction(data || null);
+    const id = searchParams.get('id');
+    if (id) {
+      const data = getInstruction(id);
+      setInstruction(data || null);
+    }
     setLoading(false);
-  }, [params.id]);
+  }, [searchParams]);
 
   if (loading) {
     return (
@@ -39,4 +41,12 @@ export default function EditInstructionPage() {
   }
 
   return <InstructionForm initialData={instruction} />;
+}
+
+export default function EditInstructionPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[50vh]"><p className="text-gray-500">読み込み中...</p></div>}>
+      <EditInstructionContent />
+    </Suspense>
+  );
 }
