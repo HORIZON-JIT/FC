@@ -172,25 +172,39 @@ export async function exportToExcel(instruction: WorkInstruction): Promise<void>
       row++;
     }
 
-    // Image
+    // Image (two-cell anchor: image is constrained within the reserved rows)
     if (step.imageDataUrl) {
-      const IMAGE_H = 200;
-      const IMAGE_W = 340;
-      ws.getRow(row).height = IMAGE_H * 0.75 + 10;
+      const IMAGE_ROWS = 10;
+      const IMAGE_ROW_HEIGHT = 20; // points per row
+      const imageStartRow = row;
 
-      ws.mergeCells(row, 1, row, 6);
-      const imgCell = ws.getCell(row, 1);
+      // Reserve rows with uniform height
+      for (let r = 0; r < IMAGE_ROWS; r++) {
+        ws.getRow(imageStartRow + r).height = IMAGE_ROW_HEIGHT;
+      }
+
+      // Merge image region (1-based)
+      ws.mergeCells(imageStartRow, 1, imageStartRow + IMAGE_ROWS - 1, 6);
+      const imgCell = ws.getCell(imageStartRow, 1);
       imgCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.white } };
       imgCell.alignment = { vertical: 'middle', horizontal: 'center' };
-      for (let c = 1; c <= 6; c++) setBorder(ws.getCell(row, c));
+      for (let r = imageStartRow; r < imageStartRow + IMAGE_ROWS; r++) {
+        for (let c = 1; c <= 6; c++) {
+          setBorder(ws.getCell(r, c));
+        }
+      }
 
       const { base64, extension } = parseDataUrl(step.imageDataUrl);
       const imageId = wb.addImage({ base64, extension });
+
+      // tl/br use 0-based indices; pad slightly for margins
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ws.addImage(imageId, {
-        tl: { col: 1.5, row: row - 1 + 0.1 },
-        ext: { width: IMAGE_W, height: IMAGE_H },
-      });
-      row++;
+        tl: { col: 1.3, row: imageStartRow - 1 + 0.3 },
+        br: { col: 5.7, row: imageStartRow - 1 + IMAGE_ROWS - 0.3 },
+      } as any);
+
+      row = imageStartRow + IMAGE_ROWS;
     }
 
     // Video URL
