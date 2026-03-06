@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+body {
+  font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic', sans-serif;
+}
+
+@media print {
+  header,
+  .no-print {
+    display: none !important;
+  }
+}
