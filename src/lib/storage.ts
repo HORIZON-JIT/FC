@@ -32,3 +32,15 @@ export function deleteInstruction(id: string): void {
   const all = getAllInstructions().filter((inst) => inst.id !== id);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
 }
+
+export function importInstruction(instruction: WorkInstruction): string {
+  const existing = getInstruction(instruction.id);
+  if (existing) {
+    const newId = crypto.randomUUID();
+    const imported = { ...instruction, id: newId };
+    saveInstruction(imported);
+    return newId;
+  }
+  saveInstruction(instruction);
+  return instruction.id;
+}

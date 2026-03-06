@@ -4,10 +4,12 @@ import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
-import { getInstruction, deleteInstruction } from '@/lib/storage';
+import { getInstruction, deleteInstruction, importInstruction } from '@/lib/storage';
 import { exportToPdf } from '@/lib/exportPdf';
 import { exportToExcel } from '@/lib/exportSpreadsheet';
 import { exportToWord } from '@/lib/exportWord';
+import { generateShareUrl, parseShareData, getViewPageBaseUrl, ShareResult } from '@/lib/shareLink';
+import ShareLinkModal from '@/components/ShareLinkModal';
 
 function getYouTubeEmbedUrl(url: string): string | null {
   try {
@@ -29,8 +31,22 @@ function InstructionViewContent() {
   const router = useRouter();
   const [instruction, setInstruction] = useState<WorkInstruction | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSharedView, setIsSharedView] = useState(false);
+  const [shareResult, setShareResult] = useState<ShareResult | null>(null);
 
   useEffect(() => {
+    // Priority 1: shared data in hash fragment
+    if (window.location.hash) {
+      const shared = parseShareData(window.location.hash);
+      if (shared) {
+        setInstruction(shared);
+        setIsSharedView(true);
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Priority 2: load from localStorage by id
     const id = searchParams.get('id');
     if (id) {
       const data = getInstruction(id);
@@ -48,6 +64,21 @@ function InstructionViewContent() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleShare = () => {
+    if (!instruction) return;
+    const baseUrl = getViewPageBaseUrl();
+    const result = generateShareUrl(instruction, baseUrl);
+    setShareResult(result);
+  };
+
+  const handleImport = () => {
+    if (!instruction) return;
+    const newId = importInstruction(instruction);
+    // Navigate to the local copy
+    window.location.hash = '';
+    router.push(`/instructions/view?id=${newId}`);
   };
 
   if (loading) {
@@ -73,6 +104,21 @@ function InstructionViewContent() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
+      {/* Shared view banner */}
+      {isSharedView && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg px-4 py-3 mb-4 flex items-center justify-between no-print">
+          <p className="text-sm text-purple-800">
+            共有された手順書を閲覧しています
+          </p>
+          <button
+            onClick={handleImport}
+            className="px-3 py-1.5 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 transition"
+          >
+            インポートして保存
+          </button>
+        </div>
+      )}
+
       {/* Action bar */}
       <div className="flex flex-wrap items-center gap-2 mb-6 no-print">
         <Link href="/" className="text-sm text-gray-500 hover:text-gray-700">
@@ -103,18 +149,28 @@ function InstructionViewContent() {
         >
           Word出力
         </button>
-        <Link
-          href={`/instructions/edit?id=${instruction.id}`}
-          className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition"
-        >
-          編集
-        </Link>
-        <button
-          onClick={handleDelete}
-          className="px-3 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition"
-        >
-          削除
-        </button>
+        {!isSharedView && (
+          <>
+            <button
+              onClick={handleShare}
+              className="px-3 py-1.5 bg-purple-50 border border-purple-200 text-purple-700 rounded text-sm hover:bg-purple-100 transition"
+            >
+              共有リンク生成
+            </button>
+            <Link
+              href={`/instructions/edit?id=${instruction.id}`}
+              className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition"
+            >
+              編集
+            </Link>
+            <button
+              onClick={handleDelete}
+              className="px-3 py-1.5 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition"
+            >
+              削除
+            </button>
+          </>
+        )}
       </div>
 
       {/* Header */}
@@ -215,6 +271,15 @@ function InstructionViewContent() {
           </div>
         ))}
       </div>
+
+      {/* Share Link Modal */}
+      {shareResult && (
+        <ShareLinkModal
+          url={shareResult.url}
+          imagesIncluded={shareResult.imagesIncluded}
+          onClose={() => setShareResult(null)}
+        />
+      )}
     </div>
   );
 }
