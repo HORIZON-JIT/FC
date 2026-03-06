@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { WorkInstruction, Category, CATEGORY_LABELS } from '@/types/instruction';
 import { getAllInstructions, deleteInstruction } from '@/lib/storage';
 import { exportAllToExcel } from '@/lib/exportSpreadsheet';
+import DriveSyncButtons from '@/components/DriveSyncButtons';
 
 export default function HomePage() {
   const [instructions, setInstructions] = useState<WorkInstruction[]>([]);
@@ -36,7 +37,8 @@ export default function HomePage() {
       {/* Header area */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <h1 className="text-2xl font-bold text-gray-800">手順書一覧</h1>
-        <div className="flex gap-2 no-print">
+        <div className="flex flex-wrap gap-2 no-print">
+          <DriveSyncButtons onDataLoaded={(data) => setInstructions(data)} />
           {instructions.length > 0 && (
             <button
               onClick={() => exportAllToExcel(instructions)}

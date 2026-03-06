@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import GoogleSignInButton from './GoogleSignInButton';
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -27,6 +28,7 @@ export default function Header() {
           >
             + 新規作成
           </Link>
+          <GoogleSignInButton />
         </nav>
 
         {/* Mobile hamburger */}
