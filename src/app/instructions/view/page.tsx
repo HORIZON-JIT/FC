@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
 import { getInstruction, deleteInstruction } from '@/lib/storage';
@@ -23,18 +23,20 @@ function getYouTubeEmbedUrl(url: string): string | null {
   }
 }
 
-export default function InstructionViewPage() {
-  const params = useParams();
+function InstructionViewContent() {
+  const searchParams = useSearchParams();
   const router = useRouter();
   const [instruction, setInstruction] = useState<WorkInstruction | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const id = params.id as string;
-    const data = getInstruction(id);
-    setInstruction(data || null);
+    const id = searchParams.get('id');
+    if (id) {
+      const data = getInstruction(id);
+      setInstruction(data || null);
+    }
     setLoading(false);
-  }, [params.id]);
+  }, [searchParams]);
 
   const handleDelete = () => {
     if (!instruction) return;
@@ -95,7 +97,7 @@ export default function InstructionViewPage() {
           Excel出力
         </button>
         <Link
-          href={`/instructions/${instruction.id}/edit`}
+          href={`/instructions/edit?id=${instruction.id}`}
           className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition"
         >
           編集
@@ -139,7 +141,6 @@ export default function InstructionViewPage() {
             key={step.id}
             className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
           >
-            {/* Step header */}
             <div className="bg-blue-50 px-4 py-3 border-b border-blue-100">
               <div className="flex items-center gap-3">
                 <span className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full font-bold text-sm shrink-0">
@@ -150,14 +151,12 @@ export default function InstructionViewPage() {
             </div>
 
             <div className="p-4 space-y-4">
-              {/* Description */}
               {step.description && (
                 <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
                   {step.description}
                 </p>
               )}
 
-              {/* Image */}
               {step.imageDataUrl && (
                 <div className="rounded border border-gray-200 overflow-hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -169,7 +168,6 @@ export default function InstructionViewPage() {
                 </div>
               )}
 
-              {/* Video */}
               {step.videoUrl && (
                 <div>
                   {getYouTubeEmbedUrl(step.videoUrl) ? (
@@ -199,7 +197,6 @@ export default function InstructionViewPage() {
                 </div>
               )}
 
-              {/* Caution */}
               {step.caution && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
                   <p className="text-sm text-yellow-800 font-medium">
@@ -212,5 +209,13 @@ export default function InstructionViewPage() {
         ))}
       </div>
     </div>
+  );
+}
+
+export default function InstructionViewPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[50vh]"><p className="text-gray-500">読み込み中...</p></div>}>
+      <InstructionViewContent />
+    </Suspense>
   );
 }
