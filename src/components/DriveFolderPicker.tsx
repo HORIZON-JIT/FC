@@ -101,8 +101,8 @@ export default function DriveFolderPicker({ open, onClose, onSelect }: DriveFold
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="px-4 py-3 border-b border-gray-200">
           <h3 className="text-lg font-bold text-gray-800">保存先フォルダを選択</h3>
@@ -181,23 +181,23 @@ export default function DriveFolderPicker({ open, onClose, onSelect }: DriveFold
         </div>
 
         {/* Actions */}
-        <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+        <div className="px-3 sm:px-4 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
           <button
             onClick={handleReset}
-            className="text-sm text-gray-500 hover:text-gray-700 underline"
+            className="text-xs sm:text-sm text-gray-500 hover:text-gray-700 underline"
           >
             デフォルトに戻す
           </button>
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition"
+              className="px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-600 hover:text-gray-800 transition"
             >
               キャンセル
             </button>
             <button
               onClick={handleSelectCurrent}
-              className="px-4 py-2 bg-yellow-500 text-white rounded-lg text-sm font-medium hover:bg-yellow-600 transition"
+              className="px-3 sm:px-4 py-2 bg-yellow-500 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-yellow-600 transition"
             >
               このフォルダを選択
             </button>
