@@ -1,7 +1,7 @@
 'use client';
 
 import { Step, getStepImages } from '@/types/instruction';
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 
 interface StepEditorProps {
   step: Step;
@@ -23,26 +23,32 @@ export default function StepEditor({
   onMoveDown,
 }: StepEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const pasteAreaRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const images = getStepImages(step);
 
+  // Use refs to avoid stale closures when multiple FileReaders resolve
+  const stepRef = useRef(step);
+  const imagesRef = useRef(images);
+  stepRef.current = step;
+  imagesRef.current = images;
+
   const addImage = useCallback((dataUrl: string) => {
     onChange({
-      ...step,
+      ...stepRef.current,
       imageDataUrl: undefined,
-      imageDataUrls: [...images, dataUrl],
+      imageDataUrls: [...imagesRef.current, dataUrl],
     });
-  }, [onChange, step, images]);
+  }, [onChange]);
 
   const removeImage = useCallback((idx: number) => {
-    const updated = images.filter((_, i) => i !== idx);
+    const updated = imagesRef.current.filter((_, i) => i !== idx);
     onChange({
-      ...step,
+      ...stepRef.current,
       imageDataUrl: undefined,
       imageDataUrls: updated.length > 0 ? updated : undefined,
     });
-  }, [onChange, step, images]);
+  }, [onChange]);
 
   const processImageFile = useCallback((file: File) => {
     if (file.size > 5 * 1024 * 1024) {
@@ -60,11 +66,11 @@ export default function StepEditor({
     const files = e.target.files;
     if (!files) return;
     Array.from(files).forEach(processImageFile);
-    // Reset so the same file can be selected again
     e.target.value = '';
   };
 
-  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+  // Paste handler that captures image paste from anywhere in the step editor
+  const handlePaste = useCallback((e: ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
     for (const item of Array.from(items)) {
@@ -77,8 +83,16 @@ export default function StepEditor({
     }
   }, [processImageFile]);
 
+  // Attach paste listener to the entire step editor container
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener('paste', handlePaste);
+    return () => el.removeEventListener('paste', handlePaste);
+  }, [handlePaste]);
+
   return (
-    <div className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
+    <div ref={containerRef} className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-bold text-blue-600">ステップ {index + 1}</h3>
         <div className="flex items-center gap-1">
@@ -151,7 +165,7 @@ export default function StepEditor({
           />
         </div>
 
-        {/* Image upload / Screenshot paste */}
+        {/* Image section */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             スクリーンショット・画像（任意・複数可）
@@ -169,21 +183,19 @@ export default function StepEditor({
           {images.length > 0 && (
             <div className="space-y-2 mb-2">
               {images.map((imgUrl, imgIdx) => (
-                <div key={imgIdx} className="relative group">
-                  <div className="rounded border border-gray-200 overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={imgUrl}
-                      alt={`ステップ ${index + 1} の画像 ${imgIdx + 1}`}
-                      className="max-w-full max-h-48 object-contain mx-auto"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-gray-400">画像 {imgIdx + 1}</span>
+                <div key={imgIdx} className="relative group rounded border border-gray-200 overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={imgUrl}
+                    alt={`ステップ ${index + 1} の画像 ${imgIdx + 1}`}
+                    className="max-w-full max-h-48 object-contain mx-auto"
+                  />
+                  <div className="flex items-center justify-between px-2 py-1 bg-gray-50 border-t border-gray-200">
+                    <span className="text-xs text-gray-400">画像 {imgIdx + 1}/{images.length}</span>
                     <button
                       type="button"
                       onClick={() => removeImage(imgIdx)}
-                      className="px-2 py-1 text-xs text-red-500 hover:text-red-700"
+                      className="text-xs text-red-500 hover:text-red-700"
                     >
                       削除
                     </button>
@@ -193,21 +205,21 @@ export default function StepEditor({
             </div>
           )}
 
-          {/* Add more images area */}
-          <div
-            ref={pasteAreaRef}
-            onPaste={handlePaste}
-            tabIndex={0}
-            className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition focus:outline-none focus:border-blue-500 focus:bg-blue-50/50"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <svg className="w-7 h-7 mx-auto mb-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <p className="text-sm text-gray-500 font-medium">
-              {images.length > 0 ? '画像を追加' : 'Ctrl+V でスクショを貼り付け'}
-            </p>
-            <p className="text-xs text-gray-400 mt-0.5">またはクリックして画像を選択（複数可）</p>
+          {/* Action buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-600 hover:bg-blue-100 transition"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              画像を追加
+            </button>
+            <span className="text-xs text-gray-400">
+              Ctrl+V でスクショ貼り付けも可能
+            </span>
           </div>
         </div>
 
