@@ -1,0 +1,209 @@
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import {
+  DriveFolder,
+  listFolders,
+  createNewFolder,
+  getTargetFolder,
+  setTargetFolder,
+} from '@/lib/googleDrive';
+
+interface DriveFolderPickerProps {
+  open: boolean;
+  onClose: () => void;
+  onSelect: (folder: DriveFolder | null) => void;
+}
+
+interface BreadcrumbItem {
+  id: string | undefined; // undefined = root
+  name: string;
+}
+
+export default function DriveFolderPicker({ open, onClose, onSelect }: DriveFolderPickerProps) {
+  const [folders, setFolders] = useState<DriveFolder[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([{ id: undefined, name: 'マイドライブ' }]);
+  const [creating, setCreating] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const currentParentId = breadcrumbs[breadcrumbs.length - 1].id;
+
+  const loadFolders = useCallback(async (parentId?: string) => {
+    setLoading(true);
+    try {
+      const result = await listFolders(parentId);
+      setFolders(result);
+    } catch (err) {
+      console.error('Failed to list folders:', err);
+      setFolders([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      setBreadcrumbs([{ id: undefined, name: 'マイドライブ' }]);
+      loadFolders(undefined);
+    }
+  }, [open, loadFolders]);
+
+  const navigateInto = (folder: DriveFolder) => {
+    setBreadcrumbs((prev) => [...prev, { id: folder.id, name: folder.name }]);
+    loadFolders(folder.id);
+  };
+
+  const navigateTo = (index: number) => {
+    const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
+    setBreadcrumbs(newBreadcrumbs);
+    loadFolders(newBreadcrumbs[newBreadcrumbs.length - 1].id);
+  };
+
+  const handleSelectCurrent = () => {
+    const current = breadcrumbs[breadcrumbs.length - 1];
+    if (!current.id) {
+      // Root selected - clear custom folder
+      setTargetFolder(null);
+      onSelect(null);
+    } else {
+      const folder: DriveFolder = { id: current.id, name: current.name };
+      setTargetFolder(folder);
+      onSelect(folder);
+    }
+    onClose();
+  };
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return;
+    setCreating(true);
+    try {
+      const created = await createNewFolder(newFolderName.trim(), currentParentId);
+      setNewFolderName('');
+      // Refresh folder list
+      await loadFolders(currentParentId);
+      // Navigate into new folder
+      navigateInto(created);
+    } catch (err) {
+      console.error('Failed to create folder:', err);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleReset = () => {
+    setTargetFolder(null);
+    onSelect(null);
+    onClose();
+  };
+
+  const currentTarget = getTargetFolder();
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="px-4 py-3 border-b border-gray-200">
+          <h3 className="text-lg font-bold text-gray-800">保存先フォルダを選択</h3>
+          {currentTarget && (
+            <p className="text-xs text-gray-500 mt-1">
+              現在の保存先: <span className="font-medium text-yellow-700">{currentTarget.name}</span>
+            </p>
+          )}
+        </div>
+
+        {/* Breadcrumbs */}
+        <div className="px-4 py-2 border-b border-gray-100 flex items-center gap-1 text-sm overflow-x-auto">
+          {breadcrumbs.map((crumb, i) => (
+            <span key={i} className="flex items-center gap-1 shrink-0">
+              {i > 0 && <span className="text-gray-400">/</span>}
+              <button
+                onClick={() => navigateTo(i)}
+                className={`hover:text-blue-600 ${
+                  i === breadcrumbs.length - 1
+                    ? 'font-medium text-gray-800'
+                    : 'text-gray-500 hover:underline'
+                }`}
+              >
+                {crumb.name}
+              </button>
+            </span>
+          ))}
+        </div>
+
+        {/* Folder list */}
+        <div className="flex-1 overflow-y-auto p-2 min-h-[200px]">
+          {loading ? (
+            <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
+              読み込み中...
+            </div>
+          ) : folders.length === 0 ? (
+            <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
+              フォルダがありません
+            </div>
+          ) : (
+            <ul className="space-y-1">
+              {folders.map((folder) => (
+                <li key={folder.id}>
+                  <button
+                    onClick={() => navigateInto(folder)}
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 flex items-center gap-2 text-sm transition"
+                  >
+                    <span className="text-yellow-500 text-lg">📁</span>
+                    <span className="text-gray-700 truncate">{folder.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* New folder */}
+        <div className="px-4 py-2 border-t border-gray-100">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
+              placeholder="新しいフォルダ名..."
+              className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+            <button
+              onClick={handleCreateFolder}
+              disabled={creating || !newFolderName.trim()}
+              className="px-3 py-1 bg-blue-500 text-white rounded text-sm font-medium hover:bg-blue-600 transition disabled:opacity-50"
+            >
+              {creating ? '作成中...' : '作成'}
+            </button>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+          <button
+            onClick={handleReset}
+            className="text-sm text-gray-500 hover:text-gray-700 underline"
+          >
+            デフォルトに戻す
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition"
+            >
+              キャンセル
+            </button>
+            <button
+              onClick={handleSelectCurrent}
+              className="px-4 py-2 bg-yellow-500 text-white rounded-lg text-sm font-medium hover:bg-yellow-600 transition"
+            >
+              このフォルダを選択
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
