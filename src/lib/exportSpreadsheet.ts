@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
+import { WorkInstruction, CATEGORY_LABELS, getStepImages } from '@/types/instruction';
 
 // Color palette (matching PDF design)
 const C = {
@@ -85,7 +85,7 @@ function styleRange(
 ) {
   for (let c = colStart; c <= colEnd; c++) {
     const cell = ws.getCell(row, c);
-    if (opts.font) cell.font = opts.font;
+    cell.font = { name: 'Arial', ...opts.font };
     if (opts.fill) cell.fill = opts.fill;
     if (opts.alignment) cell.alignment = opts.alignment;
     if (opts.border) {
@@ -117,7 +117,7 @@ function mergeStyled(
   ws.mergeCells(rowStart, colStart, rowEnd, colEnd);
   const cell = ws.getCell(rowStart, colStart);
   cell.value = value;
-  if (opts.font) cell.font = opts.font;
+  cell.font = { name: 'Arial', ...opts.font };
   if (opts.fill) cell.fill = opts.fill;
   cell.alignment = { vertical: 'middle', wrapText: true, ...opts.alignment };
 
@@ -245,7 +245,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
     // B: step number
     const numCell = ws.getCell(row, 2);
     numCell.value = stepNum;
-    numCell.font = { bold: true, size: 16, color: { argb: C.white } };
+    numCell.font = { name: 'Arial', bold: true, size: 16, color: { argb: C.white } };
     numCell.fill = solidFill(C.primaryMid);
     numCell.alignment = { horizontal: 'center', vertical: 'middle' };
     setBoxBorder(numCell, { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER });
@@ -277,7 +277,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
       // B: label
       const labelCell = ws.getCell(row, 2);
       labelCell.value = '説明';
-      labelCell.font = { size: 9, bold: true, color: { argb: C.gray } };
+      labelCell.font = { name: 'Arial', size: 9, bold: true, color: { argb: C.gray } };
       labelCell.fill = solidFill(C.grayLight);
       labelCell.alignment = { horizontal: 'center', vertical: 'top' };
       setBoxBorder(labelCell, { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER });
@@ -304,7 +304,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
       // B: label
       const labelCell = ws.getCell(row, 2);
       labelCell.value = '⚠ 注意';
-      labelCell.font = { size: 9, bold: true, color: { argb: C.cautionText } };
+      labelCell.font = { name: 'Arial', size: 9, bold: true, color: { argb: C.cautionText } };
       labelCell.fill = solidFill(C.cautionBg);
       labelCell.alignment = { horizontal: 'center', vertical: 'middle' };
       setBoxBorder(labelCell, {
@@ -328,8 +328,9 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
       row++;
     }
 
-    // --- Image ---
-    if (step.imageDataUrl) {
+    // --- Images ---
+    const stepImages = getStepImages(step);
+    for (let imgIdx = 0; imgIdx < stepImages.length; imgIdx++) {
       const IMAGE_ROWS = 12;
       const IMAGE_ROW_HEIGHT = 18;
       const imageStartRow = row;
@@ -342,12 +343,20 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
         setBoxBorder(aCell, { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER });
       }
 
-      // B label on first row
-      const labelCell = ws.getCell(imageStartRow, 2);
-      labelCell.value = '画像';
-      labelCell.font = { size: 9, bold: true, color: { argb: C.gray } };
-      labelCell.fill = solidFill(C.grayLight);
-      labelCell.alignment = { horizontal: 'center', vertical: 'top' };
+      // B label on first image row only
+      if (imgIdx === 0) {
+        const labelCell = ws.getCell(imageStartRow, 2);
+        labelCell.value = stepImages.length > 1 ? `画像 ${imgIdx + 1}` : '画像';
+        labelCell.font = { name: 'Arial', size: 9, bold: true, color: { argb: C.gray } };
+        labelCell.fill = solidFill(C.grayLight);
+        labelCell.alignment = { horizontal: 'center', vertical: 'top' };
+      } else {
+        const labelCell = ws.getCell(imageStartRow, 2);
+        labelCell.value = `画像 ${imgIdx + 1}`;
+        labelCell.font = { name: 'Arial', size: 9, bold: true, color: { argb: C.gray } };
+        labelCell.fill = solidFill(C.grayLight);
+        labelCell.alignment = { horizontal: 'center', vertical: 'top' };
+      }
 
       // Merge image region B-G
       ws.mergeCells(imageStartRow, 2, imageStartRow + IMAGE_ROWS - 1, LAST_COL);
@@ -360,7 +369,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
         }
       }
 
-      const { base64, extension } = parseDataUrl(step.imageDataUrl);
+      const { base64, extension } = parseDataUrl(stepImages[imgIdx]);
       const imageId = wb.addImage({ base64, extension });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ws.addImage(imageId, {
@@ -383,7 +392,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
       // B: label
       const labelCell = ws.getCell(row, 2);
       labelCell.value = '▶ 動画';
-      labelCell.font = { size: 9, bold: true, color: { argb: C.primaryMid } };
+      labelCell.font = { name: 'Arial', size: 9, bold: true, color: { argb: C.primaryMid } };
       labelCell.fill = solidFill(C.white);
       labelCell.alignment = { horizontal: 'center', vertical: 'middle' };
       setBoxBorder(labelCell, { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER });
@@ -468,7 +477,7 @@ export async function buildAllExcelBuffer(instructions: WorkInstruction[]): Prom
   headers.forEach((h, i) => {
     const cell = ws.getCell(row, i + 1);
     cell.value = h;
-    cell.font = { bold: true, size: 10, color: { argb: C.dark } };
+    cell.font = { name: 'Arial', bold: true, size: 10, color: { argb: C.dark } };
     cell.fill = solidFill(C.headerBg);
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
     setBoxBorder(cell, {
@@ -496,7 +505,7 @@ export async function buildAllExcelBuffer(instructions: WorkInstruction[]): Prom
     values.forEach((v, ci) => {
       const cell = ws.getCell(row, ci + 1);
       cell.value = v;
-      cell.font = { size: 10, color: { argb: C.dark } };
+      cell.font = { name: 'Arial', size: 10, color: { argb: C.dark } };
       cell.fill = solidFill(bgColor);
       cell.alignment = {
         vertical: 'middle',

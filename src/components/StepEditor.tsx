@@ -1,6 +1,6 @@
 'use client';
 
-import { Step } from '@/types/instruction';
+import { Step, getStepImages } from '@/types/instruction';
 import { useRef, useCallback } from 'react';
 
 interface StepEditorProps {
@@ -25,6 +25,25 @@ export default function StepEditor({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pasteAreaRef = useRef<HTMLDivElement>(null);
 
+  const images = getStepImages(step);
+
+  const addImage = useCallback((dataUrl: string) => {
+    onChange({
+      ...step,
+      imageDataUrl: undefined,
+      imageDataUrls: [...images, dataUrl],
+    });
+  }, [onChange, step, images]);
+
+  const removeImage = useCallback((idx: number) => {
+    const updated = images.filter((_, i) => i !== idx);
+    onChange({
+      ...step,
+      imageDataUrl: undefined,
+      imageDataUrls: updated.length > 0 ? updated : undefined,
+    });
+  }, [onChange, step, images]);
+
   const processImageFile = useCallback((file: File) => {
     if (file.size > 5 * 1024 * 1024) {
       alert('画像サイズは5MB以下にしてください。');
@@ -32,14 +51,17 @@ export default function StepEditor({
     }
     const reader = new FileReader();
     reader.onload = () => {
-      onChange({ ...step, imageDataUrl: reader.result as string });
+      addImage(reader.result as string);
     };
     reader.readAsDataURL(file);
-  }, [onChange, step]);
+  }, [addImage]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) processImageFile(file);
+    const files = e.target.files;
+    if (!files) return;
+    Array.from(files).forEach(processImageFile);
+    // Reset so the same file can be selected again
+    e.target.value = '';
   };
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
@@ -131,56 +153,62 @@ export default function StepEditor({
 
         {/* Image upload / Screenshot paste */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">スクリーンショット・画像（任意）</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            スクリーンショット・画像（任意・複数可）
+          </label>
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
+            multiple
             onChange={handleImageUpload}
             className="hidden"
           />
-          {!step.imageDataUrl ? (
-            <div
-              ref={pasteAreaRef}
-              onPaste={handlePaste}
-              tabIndex={0}
-              className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition focus:outline-none focus:border-blue-500 focus:bg-blue-50/50"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <svg className="w-8 h-8 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <p className="text-sm text-gray-500 font-medium">Ctrl+V でスクショを貼り付け</p>
-              <p className="text-xs text-gray-400 mt-1">またはクリックして画像を選択</p>
-            </div>
-          ) : (
-            <div className="relative group">
-              <div className="mt-1 rounded border border-gray-200 overflow-hidden">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={step.imageDataUrl}
-                  alt={`ステップ ${index + 1} の画像`}
-                  className="max-w-full max-h-48 object-contain mx-auto"
-                />
-              </div>
-              <div className="flex items-center gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1.5 bg-gray-100 border border-gray-300 rounded text-sm hover:bg-gray-200 transition"
-                >
-                  画像を変更
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChange({ ...step, imageDataUrl: undefined })}
-                  className="px-3 py-1.5 text-sm text-red-500 hover:text-red-700"
-                >
-                  削除
-                </button>
-              </div>
+
+          {/* Existing images */}
+          {images.length > 0 && (
+            <div className="space-y-2 mb-2">
+              {images.map((imgUrl, imgIdx) => (
+                <div key={imgIdx} className="relative group">
+                  <div className="rounded border border-gray-200 overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={imgUrl}
+                      alt={`ステップ ${index + 1} の画像 ${imgIdx + 1}`}
+                      className="max-w-full max-h-48 object-contain mx-auto"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs text-gray-400">画像 {imgIdx + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeImage(imgIdx)}
+                      className="px-2 py-1 text-xs text-red-500 hover:text-red-700"
+                    >
+                      削除
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
+
+          {/* Add more images area */}
+          <div
+            ref={pasteAreaRef}
+            onPaste={handlePaste}
+            tabIndex={0}
+            className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition focus:outline-none focus:border-blue-500 focus:bg-blue-50/50"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <svg className="w-7 h-7 mx-auto mb-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="text-sm text-gray-500 font-medium">
+              {images.length > 0 ? '画像を追加' : 'Ctrl+V でスクショを貼り付け'}
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">またはクリックして画像を選択（複数可）</p>
+          </div>
         </div>
 
         {/* Video URL */}

@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
+import { WorkInstruction, CATEGORY_LABELS, getStepImages } from '@/types/instruction';
 import { getInstruction, deleteInstruction, importInstruction } from '@/lib/storage';
 import { exportToPdf, buildPdfBuffer } from '@/lib/exportPdf';
 import { exportToExcel, buildExcelBuffer } from '@/lib/exportSpreadsheet';
@@ -312,16 +312,16 @@ function InstructionViewContent() {
                 </p>
               )}
 
-              {step.imageDataUrl && (
-                <div className="rounded border border-gray-200 overflow-hidden">
+              {getStepImages(step).map((imgUrl, imgIdx) => (
+                <div key={imgIdx} className="rounded border border-gray-200 overflow-hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={step.imageDataUrl}
-                    alt={`ステップ ${index + 1} の画像`}
+                    src={imgUrl}
+                    alt={`ステップ ${index + 1} の画像 ${imgIdx + 1}`}
                     className="max-w-full h-auto mx-auto"
                   />
                 </div>
-              )}
+              ))}
 
               {step.videoUrl && (
                 <div>

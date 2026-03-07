@@ -1,5 +1,5 @@
 import type jsPDF from 'jspdf';
-import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
+import { WorkInstruction, CATEGORY_LABELS, getStepImages } from '@/types/instruction';
 
 export async function exportToPdf(instruction: WorkInstruction): Promise<void> {
   try {
@@ -35,7 +35,7 @@ function buildHtmlElement(instruction: WorkInstruction): HTMLDivElement {
     top: '0',
     width: '794px',
     background: '#FFFFFF',
-    fontFamily: '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", "Yu Gothic", system-ui, sans-serif',
+    fontFamily: 'Arial, sans-serif',
     color: '#1F2937',
     lineHeight: '1.6',
     fontSize: '13px',
@@ -176,8 +176,8 @@ function buildHtmlElement(instruction: WorkInstruction): HTMLDivElement {
       stepDesc.textContent = step.description;
     }
 
-    // Image
-    if (step.imageDataUrl) {
+    // Images
+    for (const imageUrl of getStepImages(step)) {
       const imgWrapper = createEl('div', {
         textAlign: 'center',
         marginBottom: '12px',
@@ -187,7 +187,7 @@ function buildHtmlElement(instruction: WorkInstruction): HTMLDivElement {
         border: '1px solid #F3F4F6',
       }, stepBody);
       const img = document.createElement('img');
-      img.src = step.imageDataUrl;
+      img.src = imageUrl;
       setStyle(img, {
         maxWidth: '100%',
         height: 'auto',
