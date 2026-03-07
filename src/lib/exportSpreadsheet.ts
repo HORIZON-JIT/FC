@@ -63,6 +63,11 @@ function mergeFill(
 }
 
 export async function exportToExcel(instruction: WorkInstruction): Promise<void> {
+  const buffer = await buildExcelBuffer(instruction);
+  downloadBuffer(buffer, `${instruction.title}_手順書.xlsx`);
+}
+
+export async function buildExcelBuffer(instruction: WorkInstruction): Promise<ArrayBuffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('作業手順書', {
     pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1 },
@@ -241,10 +246,15 @@ export async function exportToExcel(instruction: WorkInstruction): Promise<void>
   ws.pageSetup.printArea = `A1:F${row}`;
 
   const buffer = await wb.xlsx.writeBuffer();
-  downloadBuffer(buffer as ArrayBuffer, `${instruction.title}_手順書.xlsx`);
+  return buffer as ArrayBuffer;
 }
 
 export async function exportAllToExcel(instructions: WorkInstruction[]): Promise<void> {
+  const buffer = await buildAllExcelBuffer(instructions);
+  downloadBuffer(buffer, '作業手順書一覧.xlsx');
+}
+
+export async function buildAllExcelBuffer(instructions: WorkInstruction[]): Promise<ArrayBuffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('手順書一覧', {
     properties: { showGridLines: false },
@@ -322,5 +332,5 @@ export async function exportAllToExcel(instructions: WorkInstruction[]): Promise
   footerCell.alignment = { horizontal: 'right' };
 
   const buffer = await wb.xlsx.writeBuffer();
-  downloadBuffer(buffer as ArrayBuffer, '作業手順書一覧.xlsx');
+  return buffer as ArrayBuffer;
 }
