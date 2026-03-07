@@ -1,19 +1,34 @@
 import ExcelJS from 'exceljs';
 import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
 
-// Colors
-const COLORS = {
-  primary: '2563EB',       // blue-600
-  primaryLight: 'DBEAFE',  // blue-100
+// Color palette (matching PDF design)
+const C = {
+  primary: '1E40AF',        // deep blue
+  primaryMid: '2563EB',     // blue-600
+  primaryLight: '3B82F6',   // blue-500
+  headerBg: 'EFF6FF',       // blue-50
+  badgeBlueBg: 'DBEAFE',    // blue-100
+  badgeBlueText: '1D4ED8',  // blue-700
+  badgeOrangeBg: 'FFEDD5',  // orange-100
+  badgeOrangeText: 'C2410C',// orange-700
   white: 'FFFFFF',
-  dark: '1F2937',          // gray-800
-  gray: '6B7280',          // gray-500
-  grayLight: 'F3F4F6',     // gray-100
-  border: 'D1D5DB',        // gray-300
-  cautionBg: 'FEF3C7',    // amber-100
-  cautionText: 'B45309',  // amber-700
-  cautionBorder: 'F59E0B', // amber-400
+  dark: '1F2937',           // gray-800
+  text: '374151',           // gray-700
+  gray: '6B7280',           // gray-500
+  grayLight: 'F9FAFB',      // gray-50
+  grayMid: 'F3F4F6',        // gray-100
+  border: 'E5E7EB',         // gray-200
+  borderLight: 'F3F4F6',    // gray-100
+  borderBlue: 'BFDBFE',     // blue-200
+  cautionBg: 'FEF3C7',      // amber-100
+  cautionText: '92400E',    // amber-800
+  cautionBorder: 'F59E0B',  // amber-400
+  stepTitle: '1E3A5F',      // dark blue
+  accent: '2563EB',         // blue for accent strip
 };
+
+const THIN_BORDER: Partial<ExcelJS.Border> = { style: 'thin', color: { argb: C.border } };
+const NO_BORDER: Partial<ExcelJS.Border> = { style: undefined };
 
 function parseDataUrl(dataUrl: string): { base64: string; extension: 'png' | 'jpeg' } {
   const match = dataUrl.match(/^data:image\/(png|jpe?g|gif|webp);base64,(.+)$/);
@@ -36,31 +51,93 @@ function downloadBuffer(buffer: ArrayBuffer, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function setBorder(cell: ExcelJS.Cell, style: Partial<ExcelJS.Border> = { style: 'thin', color: { argb: COLORS.border } }) {
-  cell.border = { top: style, bottom: style, left: style, right: style };
+function setBoxBorder(cell: ExcelJS.Cell, options?: {
+  top?: Partial<ExcelJS.Border>;
+  bottom?: Partial<ExcelJS.Border>;
+  left?: Partial<ExcelJS.Border>;
+  right?: Partial<ExcelJS.Border>;
+}) {
+  cell.border = {
+    top: options?.top ?? THIN_BORDER,
+    bottom: options?.bottom ?? THIN_BORDER,
+    left: options?.left ?? THIN_BORDER,
+    right: options?.right ?? THIN_BORDER,
+  };
 }
 
-function mergeFill(
-  sheet: ExcelJS.Worksheet,
+/** Apply style to a range of cells in a row */
+function styleRange(
+  ws: ExcelJS.Worksheet,
   row: number,
   colStart: number,
   colEnd: number,
-  value: string,
-  font: Partial<ExcelJS.Font>,
-  fill: ExcelJS.Fill | null,
-  alignment?: Partial<ExcelJS.Alignment>,
+  opts: {
+    font?: Partial<ExcelJS.Font>;
+    fill?: ExcelJS.Fill;
+    alignment?: Partial<ExcelJS.Alignment>;
+    border?: {
+      top?: Partial<ExcelJS.Border>;
+      bottom?: Partial<ExcelJS.Border>;
+      left?: Partial<ExcelJS.Border>;
+      right?: Partial<ExcelJS.Border>;
+    };
+  },
 ) {
-  sheet.mergeCells(row, colStart, row, colEnd);
-  const cell = sheet.getCell(row, colStart);
-  cell.value = value;
-  cell.font = font;
-  if (fill) cell.fill = fill;
-  cell.alignment = { vertical: 'middle', wrapText: true, ...alignment };
-  // Apply border to all cells in the merged range
   for (let c = colStart; c <= colEnd; c++) {
-    setBorder(sheet.getCell(row, c));
+    const cell = ws.getCell(row, c);
+    if (opts.font) cell.font = opts.font;
+    if (opts.fill) cell.fill = opts.fill;
+    if (opts.alignment) cell.alignment = opts.alignment;
+    if (opts.border) {
+      setBoxBorder(cell, opts.border);
+    }
   }
 }
+
+/** Merge cells and set value with styling */
+function mergeStyled(
+  ws: ExcelJS.Worksheet,
+  rowStart: number,
+  colStart: number,
+  rowEnd: number,
+  colEnd: number,
+  value: string | ExcelJS.CellRichTextValue,
+  opts: {
+    font?: Partial<ExcelJS.Font>;
+    fill?: ExcelJS.Fill;
+    alignment?: Partial<ExcelJS.Alignment>;
+    border?: {
+      top?: Partial<ExcelJS.Border>;
+      bottom?: Partial<ExcelJS.Border>;
+      left?: Partial<ExcelJS.Border>;
+      right?: Partial<ExcelJS.Border>;
+    };
+  },
+) {
+  ws.mergeCells(rowStart, colStart, rowEnd, colEnd);
+  const cell = ws.getCell(rowStart, colStart);
+  cell.value = value;
+  if (opts.font) cell.font = opts.font;
+  if (opts.fill) cell.fill = opts.fill;
+  cell.alignment = { vertical: 'middle', wrapText: true, ...opts.alignment };
+
+  // Apply border to all cells in range
+  for (let r = rowStart; r <= rowEnd; r++) {
+    for (let c = colStart; c <= colEnd; c++) {
+      if (opts.border) {
+        setBoxBorder(ws.getCell(r, c), opts.border);
+      }
+    }
+  }
+}
+
+const solidFill = (color: string): ExcelJS.Fill => ({
+  type: 'pattern', pattern: 'solid', fgColor: { argb: color },
+});
+
+// ============================================================
+// Single instruction export
+// ============================================================
 
 export async function exportToExcel(instruction: WorkInstruction): Promise<void> {
   const buffer = await buildExcelBuffer(instruction);
@@ -74,153 +151,251 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
     properties: { showGridLines: false },
   });
 
-  // Column widths: A(3) + B(12) + C(20) + D(20) + E(20) + F(12) = ~87 chars wide
+  // Columns: A(accent 1.5) B(number 5) C(16) D(16) E(16) F(16) G(12)
   ws.columns = [
-    { width: 3 },   // A: margin
-    { width: 14 },  // B: labels
-    { width: 22 },  // C: content
-    { width: 22 },  // D: content
-    { width: 22 },  // E: content
-    { width: 14 },  // F: dates/info
+    { width: 1.5 },  // A: accent stripe
+    { width: 6 },    // B: step number / label
+    { width: 16 },   // C: content
+    { width: 16 },   // D: content
+    { width: 16 },   // E: content
+    { width: 16 },   // F: content
+    { width: 12 },   // G: dates/info
   ];
 
+  const LAST_COL = 7;
   let row = 1;
 
-  // ===== HEADER SECTION =====
-  // Title bar
-  ws.getRow(row).height = 40;
-  mergeFill(ws, row, 1, 6, instruction.title,
-    { bold: true, size: 18, color: { argb: COLORS.white } },
-    { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.primary } },
-    { horizontal: 'center' },
-  );
+  // ===== TITLE BANNER =====
+  ws.getRow(row).height = 44;
+  mergeStyled(ws, row, 1, row, LAST_COL, instruction.title, {
+    font: { bold: true, size: 20, color: { argb: C.white } },
+    fill: solidFill(C.primary),
+    alignment: { horizontal: 'center' },
+    border: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
+  });
   row++;
 
-  // Category / Date row
-  ws.getRow(row).height = 24;
-  ws.mergeCells(row, 1, row, 3);
-  const catCell = ws.getCell(row, 1);
-  catCell.value = `カテゴリ：${CATEGORY_LABELS[instruction.category]}`;
-  catCell.font = { size: 10, color: { argb: COLORS.dark } };
-  catCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.primaryLight } };
-  catCell.alignment = { vertical: 'middle' };
-  for (let c = 1; c <= 3; c++) setBorder(ws.getCell(row, c));
+  // Subtitle "作業手順書"
+  ws.getRow(row).height = 22;
+  mergeStyled(ws, row, 1, row, LAST_COL, '作業手順書', {
+    font: { size: 10, color: { argb: C.primaryLight } },
+    fill: solidFill(C.primaryMid),
+    alignment: { horizontal: 'center' },
+    border: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
+  });
+  row++;
 
-  ws.mergeCells(row, 4, row, 6);
-  const dateCell = ws.getCell(row, 4);
+  // ===== META BAR =====
+  const catColors: Record<string, { bg: string; text: string }> = {
+    pc_work: { bg: C.badgeBlueBg, text: C.badgeBlueText },
+    packing: { bg: C.badgeOrangeBg, text: C.badgeOrangeText },
+  };
+  const catC = catColors[instruction.category] || catColors.pc_work;
+
+  ws.getRow(row).height = 26;
+  // Category (left)
+  mergeStyled(ws, row, 1, row, 3, `  ${CATEGORY_LABELS[instruction.category]}`, {
+    font: { size: 10, bold: true, color: { argb: catC.text } },
+    fill: solidFill(catC.bg),
+    alignment: { horizontal: 'left' },
+    border: { top: THIN_BORDER, bottom: THIN_BORDER, left: NO_BORDER, right: NO_BORDER },
+  });
+  // Dates (right)
   const created = new Date(instruction.createdAt).toLocaleDateString('ja-JP');
   const updated = new Date(instruction.updatedAt).toLocaleDateString('ja-JP');
-  dateCell.value = `作成：${created}　更新：${updated}`;
-  dateCell.font = { size: 9, color: { argb: COLORS.gray } };
-  dateCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.primaryLight } };
-  dateCell.alignment = { vertical: 'middle', horizontal: 'right' };
-  for (let c = 4; c <= 6; c++) setBorder(ws.getCell(row, c));
+  mergeStyled(ws, row, 4, row, LAST_COL, `作成: ${created}  |  更新: ${updated}  `, {
+    font: { size: 9, color: { argb: C.gray } },
+    fill: solidFill(C.grayLight),
+    alignment: { horizontal: 'right' },
+    border: { top: THIN_BORDER, bottom: THIN_BORDER, left: NO_BORDER, right: NO_BORDER },
+  });
   row++;
 
-  // Description
+  // ===== DESCRIPTION =====
   if (instruction.description) {
-    const descLines = Math.ceil(instruction.description.length / 40);
-    ws.getRow(row).height = Math.max(20, descLines * 16);
-    mergeFill(ws, row, 1, 6, instruction.description,
-      { size: 10, color: { argb: COLORS.dark } },
-      { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.grayLight } },
-    );
+    const descLines = Math.ceil(instruction.description.length / 50);
+    ws.getRow(row).height = Math.max(28, descLines * 18);
+    mergeStyled(ws, row, 1, row, LAST_COL, `  ${instruction.description}`, {
+      font: { size: 10, color: { argb: C.text } },
+      fill: solidFill(C.white),
+      border: { top: NO_BORDER, bottom: THIN_BORDER, left: NO_BORDER, right: NO_BORDER },
+    });
     row++;
   }
 
   // Spacer
-  ws.getRow(row).height = 10;
+  ws.getRow(row).height = 12;
   row++;
 
-  // ===== STEPS SECTION =====
+  // ===== STEPS =====
   const sortedSteps = [...instruction.steps].sort((a, b) => a.orderIndex - b.orderIndex);
 
   for (let i = 0; i < sortedSteps.length; i++) {
     const step = sortedSteps[i];
+    const stepNum = String(i + 1).padStart(2, '0');
 
-    // Step header bar
-    ws.getRow(row).height = 28;
-    mergeFill(ws, row, 1, 6, `  STEP ${i + 1}    ${step.title}`,
-      { bold: true, size: 12, color: { argb: COLORS.white } },
-      { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.primary } },
-    );
+    // --- Step header row ---
+    ws.getRow(row).height = 34;
+
+    // A: accent stripe
+    const accentCell = ws.getCell(row, 1);
+    accentCell.fill = solidFill(C.accent);
+    setBoxBorder(accentCell, { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER });
+
+    // B: step number
+    const numCell = ws.getCell(row, 2);
+    numCell.value = stepNum;
+    numCell.font = { bold: true, size: 16, color: { argb: C.white } };
+    numCell.fill = solidFill(C.primaryMid);
+    numCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    setBoxBorder(numCell, { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER });
+
+    // C-G: step title
+    mergeStyled(ws, row, 3, row, LAST_COL, `  ${step.title}`, {
+      font: { bold: true, size: 13, color: { argb: C.stepTitle } },
+      fill: solidFill(C.headerBg),
+      alignment: { horizontal: 'left' },
+      border: {
+        top: { style: 'thin', color: { argb: C.borderBlue } },
+        bottom: { style: 'medium', color: { argb: C.borderBlue } },
+        left: NO_BORDER,
+        right: { style: 'thin', color: { argb: C.borderBlue } },
+      },
+    });
     row++;
 
-    // Description
+    // --- Description ---
     if (step.description) {
-      const lines = Math.ceil(step.description.length / 45);
-      ws.getRow(row).height = Math.max(30, lines * 18);
-      mergeFill(ws, row, 1, 6, step.description,
-        { size: 10, color: { argb: COLORS.dark } },
-        { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.white } },
-      );
+      const lines = Math.ceil(step.description.length / 55);
+      ws.getRow(row).height = Math.max(32, lines * 18);
+
+      // A: accent
+      const aCell = ws.getCell(row, 1);
+      aCell.fill = solidFill(C.accent);
+      setBoxBorder(aCell, { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER });
+
+      // B: label
+      const labelCell = ws.getCell(row, 2);
+      labelCell.value = '説明';
+      labelCell.font = { size: 9, bold: true, color: { argb: C.gray } };
+      labelCell.fill = solidFill(C.grayLight);
+      labelCell.alignment = { horizontal: 'center', vertical: 'top' };
+      setBoxBorder(labelCell, { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER });
+
+      // C-G: description content
+      mergeStyled(ws, row, 3, row, LAST_COL, step.description, {
+        font: { size: 10, color: { argb: C.text } },
+        fill: solidFill(C.white),
+        border: { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER },
+      });
       row++;
     }
 
-    // Caution
+    // --- Caution ---
     if (step.caution) {
-      const cautionLines = Math.ceil(step.caution.length / 40);
-      ws.getRow(row).height = Math.max(26, cautionLines * 16);
-      mergeFill(ws, row, 1, 6, `⚠ ${step.caution}`,
-        { size: 10, bold: true, color: { argb: COLORS.cautionText } },
-        { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.cautionBg } },
-      );
-      // Caution border
-      for (let c = 1; c <= 6; c++) {
-        ws.getCell(row, c).border = {
-          top: { style: 'thin', color: { argb: COLORS.cautionBorder } },
-          bottom: { style: 'thin', color: { argb: COLORS.cautionBorder } },
-          left: { style: 'thin', color: { argb: COLORS.cautionBorder } },
-          right: { style: 'thin', color: { argb: COLORS.cautionBorder } },
-        };
-      }
+      const cautionLines = Math.ceil(step.caution.length / 50);
+      ws.getRow(row).height = Math.max(28, cautionLines * 16);
+
+      // A: amber accent
+      const aCell = ws.getCell(row, 1);
+      aCell.fill = solidFill(C.cautionBorder);
+      setBoxBorder(aCell, { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER });
+
+      // B: label
+      const labelCell = ws.getCell(row, 2);
+      labelCell.value = '⚠ 注意';
+      labelCell.font = { size: 9, bold: true, color: { argb: C.cautionText } };
+      labelCell.fill = solidFill(C.cautionBg);
+      labelCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      setBoxBorder(labelCell, {
+        top: { style: 'thin', color: { argb: C.cautionBorder } },
+        bottom: { style: 'thin', color: { argb: C.cautionBorder } },
+        left: { style: 'thin', color: { argb: C.cautionBorder } },
+        right: { style: 'thin', color: { argb: C.cautionBorder } },
+      });
+
+      // C-G: caution text
+      mergeStyled(ws, row, 3, row, LAST_COL, step.caution, {
+        font: { size: 10, color: { argb: C.cautionText } },
+        fill: solidFill(C.cautionBg),
+        border: {
+          top: { style: 'thin', color: { argb: C.cautionBorder } },
+          bottom: { style: 'thin', color: { argb: C.cautionBorder } },
+          left: { style: 'thin', color: { argb: C.cautionBorder } },
+          right: { style: 'thin', color: { argb: C.cautionBorder } },
+        },
+      });
       row++;
     }
 
-    // Image (two-cell anchor: image is constrained within the reserved rows)
+    // --- Image ---
     if (step.imageDataUrl) {
-      const IMAGE_ROWS = 10;
-      const IMAGE_ROW_HEIGHT = 20; // points per row
+      const IMAGE_ROWS = 12;
+      const IMAGE_ROW_HEIGHT = 18;
       const imageStartRow = row;
 
-      // Reserve rows with uniform height
       for (let r = 0; r < IMAGE_ROWS; r++) {
         ws.getRow(imageStartRow + r).height = IMAGE_ROW_HEIGHT;
+        // A: accent stripe continuation
+        const aCell = ws.getCell(imageStartRow + r, 1);
+        aCell.fill = solidFill(C.accent);
+        setBoxBorder(aCell, { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER });
       }
 
-      // Merge image region (1-based)
-      ws.mergeCells(imageStartRow, 1, imageStartRow + IMAGE_ROWS - 1, 6);
-      const imgCell = ws.getCell(imageStartRow, 1);
-      imgCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.white } };
+      // B label on first row
+      const labelCell = ws.getCell(imageStartRow, 2);
+      labelCell.value = '画像';
+      labelCell.font = { size: 9, bold: true, color: { argb: C.gray } };
+      labelCell.fill = solidFill(C.grayLight);
+      labelCell.alignment = { horizontal: 'center', vertical: 'top' };
+
+      // Merge image region B-G
+      ws.mergeCells(imageStartRow, 2, imageStartRow + IMAGE_ROWS - 1, LAST_COL);
+      const imgCell = ws.getCell(imageStartRow, 2);
+      imgCell.fill = solidFill(C.grayLight);
       imgCell.alignment = { vertical: 'middle', horizontal: 'center' };
       for (let r = imageStartRow; r < imageStartRow + IMAGE_ROWS; r++) {
-        for (let c = 1; c <= 6; c++) {
-          setBorder(ws.getCell(r, c));
+        for (let c = 2; c <= LAST_COL; c++) {
+          setBoxBorder(ws.getCell(r, c), { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER });
         }
       }
 
       const { base64, extension } = parseDataUrl(step.imageDataUrl);
       const imageId = wb.addImage({ base64, extension });
-
-      // tl/br use 0-based indices; pad slightly for margins
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ws.addImage(imageId, {
-        tl: { col: 1.3, row: imageStartRow - 1 + 0.3 },
-        br: { col: 5.7, row: imageStartRow - 1 + IMAGE_ROWS - 0.3 },
+        tl: { col: 2.2, row: imageStartRow - 1 + 0.3 },
+        br: { col: LAST_COL - 0.3, row: imageStartRow - 1 + IMAGE_ROWS - 0.3 },
       } as any);
 
       row = imageStartRow + IMAGE_ROWS;
     }
 
-    // Video URL
+    // --- Video URL ---
     if (step.videoUrl) {
-      ws.getRow(row).height = 22;
-      mergeFill(ws, row, 1, 6, `動画：${step.videoUrl}`,
-        { size: 9, color: { argb: COLORS.primary }, underline: true },
-        { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.white } },
-      );
-      ws.getCell(row, 1).value = {
-        text: `動画：${step.videoUrl}`,
+      ws.getRow(row).height = 24;
+
+      // A: accent
+      const aCell = ws.getCell(row, 1);
+      aCell.fill = solidFill(C.accent);
+      setBoxBorder(aCell, { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER });
+
+      // B: label
+      const labelCell = ws.getCell(row, 2);
+      labelCell.value = '▶ 動画';
+      labelCell.font = { size: 9, bold: true, color: { argb: C.primaryMid } };
+      labelCell.fill = solidFill(C.white);
+      labelCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      setBoxBorder(labelCell, { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER });
+
+      // C-G: url
+      mergeStyled(ws, row, 3, row, LAST_COL, step.videoUrl, {
+        font: { size: 10, color: { argb: C.primaryMid }, underline: true },
+        fill: solidFill(C.white),
+        border: { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER },
+      });
+      ws.getCell(row, 3).value = {
+        text: step.videoUrl,
         hyperlink: step.videoUrl,
       } as ExcelJS.CellHyperlinkValue;
       row++;
@@ -228,26 +403,30 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
 
     // Spacer between steps
     if (i < sortedSteps.length - 1) {
-      ws.getRow(row).height = 8;
+      ws.getRow(row).height = 10;
       row++;
     }
   }
 
-  // Footer
+  // ===== FOOTER =====
   row++;
-  ws.getRow(row).height = 20;
-  ws.mergeCells(row, 1, row, 6);
-  const footerCell = ws.getCell(row, 1);
-  footerCell.value = `全 ${sortedSteps.length} ステップ`;
-  footerCell.font = { size: 9, color: { argb: COLORS.gray }, italic: true };
-  footerCell.alignment = { horizontal: 'right', vertical: 'middle' };
+  ws.getRow(row).height = 22;
+  mergeStyled(ws, row, 1, row, LAST_COL, `全 ${sortedSteps.length} ステップ  `, {
+    font: { size: 9, italic: true, color: { argb: C.gray } },
+    fill: solidFill(C.grayMid),
+    alignment: { horizontal: 'right' },
+    border: { top: THIN_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
+  });
 
-  // Print area
-  ws.pageSetup.printArea = `A1:F${row}`;
+  ws.pageSetup.printArea = `A1:G${row}`;
 
   const buffer = await wb.xlsx.writeBuffer();
   return buffer as ArrayBuffer;
 }
+
+// ============================================================
+// All instructions list export
+// ============================================================
 
 export async function exportAllToExcel(instructions: WorkInstruction[]): Promise<void> {
   const buffer = await buildAllExcelBuffer(instructions);
@@ -261,7 +440,7 @@ export async function buildAllExcelBuffer(instructions: WorkInstruction[]): Prom
   });
 
   ws.columns = [
-    { width: 4 },   // No.
+    { width: 5 },   // No.
     { width: 30 },  // タイトル
     { width: 14 },  // カテゴリ
     { width: 45 },  // 概要
@@ -270,35 +449,41 @@ export async function buildAllExcelBuffer(instructions: WorkInstruction[]): Prom
     { width: 14 },  // 更新日
   ];
 
-  // Title
+  const COLS = 7;
   let row = 1;
-  ws.getRow(row).height = 35;
-  ws.mergeCells(row, 1, row, 7);
-  const titleCell = ws.getCell(row, 1);
-  titleCell.value = '作業手順書一覧';
-  titleCell.font = { bold: true, size: 16, color: { argb: COLORS.white } };
-  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.primary } };
-  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  // Title banner
+  ws.getRow(row).height = 40;
+  mergeStyled(ws, row, 1, row, COLS, '作業手順書一覧', {
+    font: { bold: true, size: 18, color: { argb: C.white } },
+    fill: solidFill(C.primary),
+    alignment: { horizontal: 'center' },
+    border: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
+  });
   row++;
 
-  // Header
+  // Column headers
   const headers = ['No.', 'タイトル', 'カテゴリ', '概要', 'ステップ数', '作成日', '更新日'];
-  ws.getRow(row).height = 24;
+  ws.getRow(row).height = 26;
   headers.forEach((h, i) => {
     const cell = ws.getCell(row, i + 1);
     cell.value = h;
-    cell.font = { bold: true, size: 10, color: { argb: COLORS.dark } };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.primaryLight } };
+    cell.font = { bold: true, size: 10, color: { argb: C.dark } };
+    cell.fill = solidFill(C.headerBg);
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    setBorder(cell);
+    setBoxBorder(cell, {
+      top: { style: 'medium', color: { argb: C.borderBlue } },
+      bottom: { style: 'medium', color: { argb: C.borderBlue } },
+      left: THIN_BORDER,
+      right: THIN_BORDER,
+    });
   });
   row++;
 
   // Data rows
   instructions.forEach((inst, i) => {
-    const isEven = i % 2 === 0;
-    const bgColor = isEven ? COLORS.white : COLORS.grayLight;
-    const values = [
+    const bgColor = i % 2 === 0 ? C.white : C.grayLight;
+    const values: (string | number | undefined)[] = [
       i + 1,
       inst.title,
       CATEGORY_LABELS[inst.category],
@@ -307,29 +492,29 @@ export async function buildAllExcelBuffer(instructions: WorkInstruction[]): Prom
       new Date(inst.createdAt).toLocaleDateString('ja-JP'),
       new Date(inst.updatedAt).toLocaleDateString('ja-JP'),
     ];
-    ws.getRow(row).height = 22;
+    ws.getRow(row).height = 24;
     values.forEach((v, ci) => {
       const cell = ws.getCell(row, ci + 1);
       cell.value = v;
-      cell.font = { size: 10, color: { argb: COLORS.dark } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+      cell.font = { size: 10, color: { argb: C.dark } };
+      cell.fill = solidFill(bgColor);
       cell.alignment = {
         vertical: 'middle',
         wrapText: true,
         horizontal: ci === 0 || ci === 4 ? 'center' : 'left',
       };
-      setBorder(cell);
+      setBoxBorder(cell);
     });
     row++;
   });
 
-  // Footer count
+  // Footer
   row++;
-  ws.mergeCells(row, 1, row, 7);
-  const footerCell = ws.getCell(row, 1);
-  footerCell.value = `合計：${instructions.length} 件`;
-  footerCell.font = { size: 9, color: { argb: COLORS.gray }, italic: true };
-  footerCell.alignment = { horizontal: 'right' };
+  mergeStyled(ws, row, 1, row, COLS, `合計：${instructions.length} 件`, {
+    font: { size: 9, italic: true, color: { argb: C.gray } },
+    alignment: { horizontal: 'right' },
+    border: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
+  });
 
   const buffer = await wb.xlsx.writeBuffer();
   return buffer as ArrayBuffer;
