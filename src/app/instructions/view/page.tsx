@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
 import { getInstruction, deleteInstruction, importInstruction } from '@/lib/storage';
-import { exportToPdf } from '@/lib/exportPdf';
+import { exportToPdf, buildPdfBuffer } from '@/lib/exportPdf';
 import { exportToExcel, buildExcelBuffer } from '@/lib/exportSpreadsheet';
 import { exportToWord } from '@/lib/exportWord';
 import { generateShareUrl, parseShareData, getViewPageBaseUrl, ShareResult } from '@/lib/shareLink';
@@ -87,6 +87,23 @@ function InstructionViewContent() {
     const baseUrl = getViewPageBaseUrl();
     const result = generateShareUrl(instruction, baseUrl);
     setShareResult(result);
+  };
+
+  const handlePdfToDrive = async () => {
+    if (!instruction) return;
+    setDriveSaving(true);
+    try {
+      const buffer = await buildPdfBuffer(instruction);
+      const fileName = `${instruction.title}.pdf`;
+      await saveFileToDrive(buffer, fileName, 'application/pdf');
+      const folderName = getTargetFolder()?.name || 'WorkInstructions';
+      setDriveMessage({ text: `「${folderName}」に保存しました`, type: 'success' });
+    } catch (err) {
+      console.error('Drive save error:', err);
+      setDriveMessage({ text: 'Driveへの保存に失敗しました', type: 'error' });
+    } finally {
+      setDriveSaving(false);
+    }
   };
 
   const handleExcelToDrive = async () => {
@@ -174,6 +191,15 @@ function InstructionViewContent() {
         >
           PDF出力
         </button>
+        {isGoogleConfigured() && auth.isSignedIn && (
+          <button
+            onClick={handlePdfToDrive}
+            disabled={driveSaving}
+            className="px-3 py-1.5 bg-yellow-50 border border-yellow-300 text-yellow-800 rounded text-sm hover:bg-yellow-100 transition disabled:opacity-50"
+          >
+            {driveSaving ? '保存中...' : 'PDFをDriveに保存'}
+          </button>
+        )}
         <button
           onClick={() => exportToExcel(instruction)}
           className="px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 rounded text-sm hover:bg-green-100 transition"
