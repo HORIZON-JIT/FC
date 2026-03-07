@@ -264,10 +264,29 @@ function buildHtmlElement(instruction: WorkInstruction): HTMLDivElement {
 }
 
 async function buildPdf(instruction: WorkInstruction): Promise<jsPDF> {
-  const container = buildHtmlElement(instruction);
-  document.body.appendChild(container);
+  // Render inside an iframe to isolate from Tailwind CSS v4's lab()/oklch() colors
+  // which html2canvas cannot parse
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'absolute';
+  iframe.style.left = '-9999px';
+  iframe.style.top = '0';
+  iframe.style.width = '794px';
+  iframe.style.border = 'none';
+  document.body.appendChild(iframe);
 
   try {
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!iframeDoc) throw new Error('Failed to create iframe document');
+
+    iframeDoc.open();
+    iframeDoc.write('<!DOCTYPE html><html><head></head><body style="margin:0;padding:0;"></body></html>');
+    iframeDoc.close();
+
+    const container = buildHtmlElement(instruction);
+    container.style.position = 'static';
+    container.style.left = '';
+    iframeDoc.body.appendChild(container);
+
     // Wait for images to load
     const images = container.querySelectorAll('img');
     await Promise.all(
@@ -320,6 +339,6 @@ async function buildPdf(instruction: WorkInstruction): Promise<jsPDF> {
 
     return pdf;
   } finally {
-    container.remove();
+    iframe.remove();
   }
 }
