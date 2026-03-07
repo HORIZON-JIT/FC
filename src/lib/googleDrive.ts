@@ -19,6 +19,15 @@ interface DriveFileList {
   files: DriveFile[];
 }
 
+interface SharedDrive {
+  id: string;
+  name: string;
+}
+
+interface SharedDriveList {
+  drives: SharedDrive[];
+}
+
 // --- Target folder management ---
 
 export function getTargetFolder(): DriveFolder | null {
@@ -38,20 +47,61 @@ export function setTargetFolder(folder: DriveFolder | null): void {
   }
 }
 
+// --- Drive location types ---
+
+export type DriveLocation = 'my-drive' | 'shared-drives' | 'shared-with-me';
+
+// --- Shared drives ---
+
+export async function listSharedDrives(): Promise<DriveFolder[]> {
+  const res = await gapi.client.request<SharedDriveList>({
+    path: 'https://www.googleapis.com/drive/v3/drives',
+    params: {
+      pageSize: '100',
+      fields: 'drives(id,name)',
+    },
+  });
+  return (res.result.drives || []).map((d) => ({ id: d.id, name: d.name }));
+}
+
 // --- Folder browsing ---
 
-export async function listFolders(parentId?: string): Promise<DriveFolder[]> {
+export async function listFolders(parentId?: string, options?: { driveId?: string }): Promise<DriveFolder[]> {
   const parentQuery = parentId
     ? `'${parentId}' in parents and`
     : `'root' in parents and`;
+
+  const params: Record<string, string> = {
+    q: `${parentQuery} mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields: 'files(id,name)',
+    orderBy: 'name',
+    pageSize: '100',
+    supportsAllDrives: 'true',
+    includeItemsFromAllDrives: 'true',
+  };
+
+  if (options?.driveId) {
+    params.corpora = 'drive';
+    params.driveId = options.driveId;
+  }
+
+  const res = await gapi.client.request<DriveFileList>({
+    path: 'https://www.googleapis.com/drive/v3/files',
+    params,
+  });
+  return res.result.files.map((f) => ({ id: f.id, name: f.name }));
+}
+
+export async function listSharedWithMeFolders(): Promise<DriveFolder[]> {
   const res = await gapi.client.request<DriveFileList>({
     path: 'https://www.googleapis.com/drive/v3/files',
     params: {
-      q: `${parentQuery} mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      q: "sharedWithMe=true and mimeType='application/vnd.google-apps.folder' and trashed=false",
       fields: 'files(id,name)',
       orderBy: 'name',
       pageSize: '100',
-      spaces: 'drive',
+      supportsAllDrives: 'true',
+      includeItemsFromAllDrives: 'true',
     },
   });
   return res.result.files.map((f) => ({ id: f.id, name: f.name }));
@@ -66,6 +116,7 @@ export async function createNewFolder(name: string, parentId?: string): Promise<
   const res = await gapi.client.request<DriveFile>({
     path: 'https://www.googleapis.com/drive/v3/files',
     method: 'POST',
+    params: { supportsAllDrives: 'true' },
     body,
   });
   return { id: res.result.id, name: res.result.name };
@@ -79,7 +130,8 @@ async function findDefaultFolder(): Promise<string | null> {
     params: {
       q: `name='${DEFAULT_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
       fields: 'files(id,name)',
-      spaces: 'drive',
+      supportsAllDrives: 'true',
+      includeItemsFromAllDrives: 'true',
     },
   });
   const files = res.result.files;
@@ -90,6 +142,7 @@ async function createDefaultFolder(): Promise<string> {
   const res = await gapi.client.request<DriveFile>({
     path: 'https://www.googleapis.com/drive/v3/files',
     method: 'POST',
+    params: { supportsAllDrives: 'true' },
     body: {
       name: DEFAULT_FOLDER_NAME,
       mimeType: 'application/vnd.google-apps.folder',
@@ -112,7 +165,8 @@ async function findFile(folderId: string): Promise<string | null> {
     params: {
       q: `name='${FILE_NAME}' and '${folderId}' in parents and trashed=false`,
       fields: 'files(id,name)',
-      spaces: 'drive',
+      supportsAllDrives: 'true',
+      includeItemsFromAllDrives: 'true',
     },
   });
   const files = res.result.files;
@@ -147,7 +201,7 @@ export async function saveInstructionsToDrive(
   await gapi.client.request({
     path,
     method: fileId ? 'PATCH' : 'POST',
-    params: { uploadType: 'multipart' },
+    params: { uploadType: 'multipart', supportsAllDrives: 'true' },
     headers: {
       'Content-Type': `multipart/related; boundary=${boundary}`,
     },
@@ -165,7 +219,7 @@ export async function loadInstructionsFromDrive(): Promise<WorkInstruction[] | n
 
   const res = await gapi.client.request<WorkInstruction[]>({
     path: `https://www.googleapis.com/drive/v3/files/${fileId}`,
-    params: { alt: 'media' },
+    params: { alt: 'media', supportsAllDrives: 'true' },
   });
 
   return res.result;
