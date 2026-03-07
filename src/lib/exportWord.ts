@@ -15,7 +15,7 @@ import {
   ExternalHyperlink,
 } from 'docx';
 import { saveAs } from 'file-saver';
-import { WorkInstruction, CATEGORY_LABELS, getStepImages } from '@/types/instruction';
+import { WorkInstruction, CATEGORY_LABELS, getStepImages, getImageCaption } from '@/types/instruction';
 
 function parseDataUrl(dataUrl: string): { buffer: Uint8Array; extension: 'png' | 'jpg' } {
   const match = dataUrl.match(/^data:image\/(png|jpe?g|gif|webp);base64,(.+)$/);
@@ -207,12 +207,13 @@ export async function exportToWord(instruction: WorkInstruction): Promise<void> 
     }
 
     // Images
-    for (const imageUrl of getStepImages(step)) {
-      const { buffer, extension } = parseDataUrl(imageUrl);
+    const stepImgs = getStepImages(step);
+    for (let imgIdx = 0; imgIdx < stepImgs.length; imgIdx++) {
+      const { buffer, extension } = parseDataUrl(stepImgs[imgIdx]);
       if (buffer.length > 0) {
         children.push(
           new Paragraph({
-            spacing: { before: 80, after: 80 },
+            spacing: { before: 80, after: 40 },
             alignment: AlignmentType.CENTER,
             children: [
               new ImageRun({
@@ -223,6 +224,24 @@ export async function exportToWord(instruction: WorkInstruction): Promise<void> 
             ],
           }),
         );
+        const caption = getImageCaption(step, imgIdx);
+        if (caption) {
+          children.push(
+            new Paragraph({
+              spacing: { before: 0, after: 80 },
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({
+                  text: caption,
+                  size: 18,
+                  italics: true,
+                  color: COLORS.gray,
+                  font: 'Arial',
+                }),
+              ],
+            }),
+          );
+        }
       }
     }
 

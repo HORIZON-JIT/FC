@@ -1,5 +1,15 @@
 import ExcelJS from 'exceljs';
-import { WorkInstruction, CATEGORY_LABELS, getStepImages } from '@/types/instruction';
+import { WorkInstruction, CATEGORY_LABELS, getStepImages, getImageCaption } from '@/types/instruction';
+
+/** Estimate row height for text in merged C-G columns (approx 40 chars/line for Japanese) */
+function calcRowHeight(text: string, charsPerLine: number, lineHeight: number, minHeight: number): number {
+  const lines = text.split('\n');
+  let totalLines = 0;
+  for (const line of lines) {
+    totalLines += Math.max(1, Math.ceil(line.length / charsPerLine));
+  }
+  return Math.max(minHeight, totalLines * lineHeight);
+}
 
 // Color palette (matching PDF design)
 const C = {
@@ -213,8 +223,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
 
   // ===== DESCRIPTION =====
   if (instruction.description) {
-    const descLines = Math.ceil(instruction.description.length / 50);
-    ws.getRow(row).height = Math.max(28, descLines * 18);
+    ws.getRow(row).height = calcRowHeight(instruction.description, 35, 18, 28);
     mergeStyled(ws, row, 1, row, LAST_COL, `  ${instruction.description}`, {
       font: { size: 10, color: { argb: C.text } },
       fill: solidFill(C.white),
@@ -266,8 +275,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
 
     // --- Description ---
     if (step.description) {
-      const lines = Math.ceil(step.description.length / 55);
-      ws.getRow(row).height = Math.max(32, lines * 18);
+      ws.getRow(row).height = calcRowHeight(step.description, 30, 18, 32);
 
       // A: accent
       const aCell = ws.getCell(row, 1);
@@ -293,8 +301,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
 
     // --- Caution ---
     if (step.caution) {
-      const cautionLines = Math.ceil(step.caution.length / 50);
-      ws.getRow(row).height = Math.max(28, cautionLines * 16);
+      ws.getRow(row).height = calcRowHeight(step.caution, 30, 18, 28);
 
       // A: amber accent
       const aCell = ws.getCell(row, 1);
@@ -374,6 +381,27 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
       } as any);
 
       row = imageStartRow + IMAGE_ROWS;
+
+      // Caption row
+      const caption = getImageCaption(step, imgIdx);
+      if (caption) {
+        ws.getRow(row).height = calcRowHeight(caption, 30, 16, 22);
+
+        const aCap = ws.getCell(row, 1);
+        aCap.fill = solidFill(C.accent);
+        setBoxBorder(aCap, { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER });
+
+        const bCap = ws.getCell(row, 2);
+        bCap.fill = solidFill(C.grayLight);
+        setBoxBorder(bCap, { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER });
+
+        mergeStyled(ws, row, 3, row, LAST_COL, caption, {
+          font: { size: 9, italic: true, color: { argb: C.gray } },
+          fill: solidFill(C.grayLight),
+          border: { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER },
+        });
+        row++;
+      }
     }
 
     // --- Video URL ---

@@ -1,5 +1,5 @@
 import type jsPDF from 'jspdf';
-import { WorkInstruction, CATEGORY_LABELS, getStepImages } from '@/types/instruction';
+import { WorkInstruction, CATEGORY_LABELS, getStepImages, getImageCaption } from '@/types/instruction';
 
 export async function exportToPdf(instruction: WorkInstruction): Promise<void> {
   try {
@@ -177,7 +177,8 @@ function buildHtmlElement(instruction: WorkInstruction): HTMLDivElement {
     }
 
     // Images
-    for (const imageUrl of getStepImages(step)) {
+    const stepImages = getStepImages(step);
+    for (let imgIdx = 0; imgIdx < stepImages.length; imgIdx++) {
       const imgWrapper = createEl('div', {
         textAlign: 'center',
         marginBottom: '12px',
@@ -187,7 +188,7 @@ function buildHtmlElement(instruction: WorkInstruction): HTMLDivElement {
         border: '1px solid #F3F4F6',
       }, stepBody);
       const img = document.createElement('img');
-      img.src = imageUrl;
+      img.src = stepImages[imgIdx];
       setStyle(img, {
         maxWidth: '100%',
         height: 'auto',
@@ -196,6 +197,16 @@ function buildHtmlElement(instruction: WorkInstruction): HTMLDivElement {
         margin: '0 auto',
       });
       imgWrapper.appendChild(img);
+      const caption = getImageCaption(step, imgIdx);
+      if (caption) {
+        const captionEl = createEl('div', {
+          fontSize: '11px',
+          color: '#6B7280',
+          marginTop: '6px',
+          textAlign: 'center',
+        }, imgWrapper);
+        captionEl.textContent = caption;
+      }
     }
 
     // Caution

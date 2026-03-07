@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { WorkInstruction, CATEGORY_LABELS, getStepImages } from '@/types/instruction';
+import { WorkInstruction, CATEGORY_LABELS, getStepImages, getImageCaption } from '@/types/instruction';
 import { getInstruction, deleteInstruction, importInstruction } from '@/lib/storage';
 import { exportToPdf, buildPdfBuffer } from '@/lib/exportPdf';
 import { exportToExcel, buildExcelBuffer } from '@/lib/exportSpreadsheet';
@@ -320,6 +320,11 @@ function InstructionViewContent() {
                     alt={`ステップ ${index + 1} の画像 ${imgIdx + 1}`}
                     className="max-w-full h-auto mx-auto"
                   />
+                  {getImageCaption(step, imgIdx) && (
+                    <p className="px-3 py-1.5 text-sm text-gray-600 bg-gray-50 border-t border-gray-200">
+                      {getImageCaption(step, imgIdx)}
+                    </p>
+                  )}
                 </div>
               ))}
 

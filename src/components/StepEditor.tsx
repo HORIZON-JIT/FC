@@ -34,21 +34,36 @@ export default function StepEditor({
   imagesRef.current = images;
 
   const addImage = useCallback((dataUrl: string) => {
+    const s = stepRef.current;
+    const imgs = imagesRef.current;
+    const captions = s.imageCaptions ?? [];
     onChange({
-      ...stepRef.current,
+      ...s,
       imageDataUrl: undefined,
-      imageDataUrls: [...imagesRef.current, dataUrl],
+      imageDataUrls: [...imgs, dataUrl],
+      imageCaptions: [...captions, ''],
     });
   }, [onChange]);
 
   const removeImage = useCallback((idx: number) => {
-    const updated = imagesRef.current.filter((_, i) => i !== idx);
+    const s = stepRef.current;
+    const updatedImgs = imagesRef.current.filter((_, i) => i !== idx);
+    const updatedCaptions = (s.imageCaptions ?? []).filter((_, i) => i !== idx);
     onChange({
-      ...stepRef.current,
+      ...s,
       imageDataUrl: undefined,
-      imageDataUrls: updated.length > 0 ? updated : undefined,
+      imageDataUrls: updatedImgs.length > 0 ? updatedImgs : undefined,
+      imageCaptions: updatedCaptions.length > 0 ? updatedCaptions : undefined,
     });
   }, [onChange]);
+
+  const updateCaption = useCallback((idx: number, caption: string) => {
+    const captions = [...(step.imageCaptions ?? [])];
+    // Ensure array is long enough
+    while (captions.length <= idx) captions.push('');
+    captions[idx] = caption;
+    onChange({ ...step, imageCaptions: captions });
+  }, [onChange, step]);
 
   const processImageFile = useCallback((file: File) => {
     if (file.size > 5 * 1024 * 1024) {
@@ -181,24 +196,33 @@ export default function StepEditor({
 
           {/* Existing images */}
           {images.length > 0 && (
-            <div className="space-y-2 mb-2">
+            <div className="space-y-3 mb-2">
               {images.map((imgUrl, imgIdx) => (
-                <div key={imgIdx} className="relative group rounded border border-gray-200 overflow-hidden">
+                <div key={imgIdx} className="rounded-lg border border-gray-200 overflow-hidden bg-white">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={imgUrl}
                     alt={`ステップ ${index + 1} の画像 ${imgIdx + 1}`}
                     className="max-w-full max-h-48 object-contain mx-auto"
                   />
-                  <div className="flex items-center justify-between px-2 py-1 bg-gray-50 border-t border-gray-200">
-                    <span className="text-xs text-gray-400">画像 {imgIdx + 1}/{images.length}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeImage(imgIdx)}
-                      className="text-xs text-red-500 hover:text-red-700"
-                    >
-                      削除
-                    </button>
+                  <div className="px-3 py-2 bg-gray-50 border-t border-gray-200 space-y-1.5">
+                    <input
+                      type="text"
+                      value={(step.imageCaptions ?? [])[imgIdx] ?? ''}
+                      onChange={(e) => updateCaption(imgIdx, e.target.value)}
+                      className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      placeholder="画像のコメントを入力..."
+                    />
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-400">画像 {imgIdx + 1}/{images.length}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeImage(imgIdx)}
+                        className="text-xs text-red-500 hover:text-red-700"
+                      >
+                        削除
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
