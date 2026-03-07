@@ -341,30 +341,26 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
         const aCell = ws.getCell(imageStartRow + r, 1);
         aCell.fill = solidFill(C.accent);
         setBoxBorder(aCell, { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER });
+
+        // B: label column (separate from image merge)
+        const bCell = ws.getCell(imageStartRow + r, 2);
+        bCell.fill = solidFill(C.grayLight);
+        setBoxBorder(bCell, { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER });
       }
 
-      // B label on first image row only
-      if (imgIdx === 0) {
-        const labelCell = ws.getCell(imageStartRow, 2);
-        labelCell.value = stepImages.length > 1 ? `画像 ${imgIdx + 1}` : '画像';
-        labelCell.font = { name: 'Arial', size: 9, bold: true, color: { argb: C.gray } };
-        labelCell.fill = solidFill(C.grayLight);
-        labelCell.alignment = { horizontal: 'center', vertical: 'top' };
-      } else {
-        const labelCell = ws.getCell(imageStartRow, 2);
-        labelCell.value = `画像 ${imgIdx + 1}`;
-        labelCell.font = { name: 'Arial', size: 9, bold: true, color: { argb: C.gray } };
-        labelCell.fill = solidFill(C.grayLight);
-        labelCell.alignment = { horizontal: 'center', vertical: 'top' };
-      }
+      // B label text on first row
+      const labelCell = ws.getCell(imageStartRow, 2);
+      labelCell.value = stepImages.length > 1 ? `画像 ${imgIdx + 1}` : '画像';
+      labelCell.font = { name: 'Arial', size: 9, bold: true, color: { argb: C.gray } };
+      labelCell.alignment = { horizontal: 'center', vertical: 'top' };
 
-      // Merge image region B-G
-      ws.mergeCells(imageStartRow, 2, imageStartRow + IMAGE_ROWS - 1, LAST_COL);
-      const imgCell = ws.getCell(imageStartRow, 2);
+      // Merge image region C-G only (not B)
+      ws.mergeCells(imageStartRow, 3, imageStartRow + IMAGE_ROWS - 1, LAST_COL);
+      const imgCell = ws.getCell(imageStartRow, 3);
       imgCell.fill = solidFill(C.grayLight);
       imgCell.alignment = { vertical: 'middle', horizontal: 'center' };
       for (let r = imageStartRow; r < imageStartRow + IMAGE_ROWS; r++) {
-        for (let c = 2; c <= LAST_COL; c++) {
+        for (let c = 3; c <= LAST_COL; c++) {
           setBoxBorder(ws.getCell(r, c), { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER });
         }
       }
