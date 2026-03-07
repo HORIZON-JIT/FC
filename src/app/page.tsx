@@ -4,22 +4,57 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { WorkInstruction, Category, CATEGORY_LABELS } from '@/types/instruction';
 import { getAllInstructions, deleteInstruction } from '@/lib/storage';
-import { exportAllToExcel } from '@/lib/exportSpreadsheet';
+import { exportAllToExcel, buildAllExcelBuffer } from '@/lib/exportSpreadsheet';
 import DriveSyncButtons from '@/components/DriveSyncButtons';
+import { saveFileToDrive, getTargetFolder } from '@/lib/googleDrive';
+import { isGoogleConfigured, getAuthState, addAuthListener, GoogleAuthState } from '@/lib/googleAuth';
 
 export default function HomePage() {
   const [instructions, setInstructions] = useState<WorkInstruction[]>([]);
   const [filterCategory, setFilterCategory] = useState<Category | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [auth, setAuth] = useState<GoogleAuthState>(getAuthState());
+  const [driveSaving, setDriveSaving] = useState(false);
+  const [driveExcelMsg, setDriveExcelMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
     setInstructions(getAllInstructions());
   }, []);
 
+  useEffect(() => {
+    if (!isGoogleConfigured()) return;
+    return addAuthListener(setAuth);
+  }, []);
+
+  useEffect(() => {
+    if (!driveExcelMsg) return;
+    const timer = setTimeout(() => setDriveExcelMsg(null), 3000);
+    return () => clearTimeout(timer);
+  }, [driveExcelMsg]);
+
   const handleDelete = (id: string, title: string) => {
     if (!confirm(`「${title}」を削除しますか？`)) return;
     deleteInstruction(id);
     setInstructions(getAllInstructions());
+  };
+
+  const handleExcelAllToDrive = async () => {
+    setDriveSaving(true);
+    try {
+      const buffer = await buildAllExcelBuffer(instructions);
+      await saveFileToDrive(
+        buffer,
+        '作業手順書一覧.xlsx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      const folderName = getTargetFolder()?.name || 'WorkInstructions';
+      setDriveExcelMsg({ text: `「${folderName}」に保存しました`, type: 'success' });
+    } catch (err) {
+      console.error('Drive save error:', err);
+      setDriveExcelMsg({ text: 'Driveへの保存に失敗しました', type: 'error' });
+    } finally {
+      setDriveSaving(false);
+    }
   };
 
   const filtered = instructions
@@ -40,12 +75,28 @@ export default function HomePage() {
         <div className="flex flex-wrap gap-2 no-print">
           <DriveSyncButtons onDataLoaded={(data) => setInstructions(data)} />
           {instructions.length > 0 && (
-            <button
-              onClick={() => exportAllToExcel(instructions)}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition"
-            >
-              一覧をExcel出力
-            </button>
+            <>
+              <button
+                onClick={() => exportAllToExcel(instructions)}
+                className="px-2 sm:px-4 py-2 bg-green-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-green-700 transition"
+              >
+                一覧をExcel出力
+              </button>
+              {isGoogleConfigured() && auth.isSignedIn && (
+                <button
+                  onClick={handleExcelAllToDrive}
+                  disabled={driveSaving}
+                  className="px-2 sm:px-4 py-2 bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg text-xs sm:text-sm font-medium hover:bg-yellow-100 transition disabled:opacity-50"
+                >
+                  {driveSaving ? '保存中...' : '一覧をDriveに保存'}
+                </button>
+              )}
+              {driveExcelMsg && (
+                <span className={`text-xs sm:text-sm ${driveExcelMsg.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                  {driveExcelMsg.text}
+                </span>
+              )}
+            </>
           )}
           <Link
             href="/instructions/new"

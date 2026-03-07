@@ -6,10 +6,12 @@ import Link from 'next/link';
 import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
 import { getInstruction, deleteInstruction, importInstruction } from '@/lib/storage';
 import { exportToPdf } from '@/lib/exportPdf';
-import { exportToExcel } from '@/lib/exportSpreadsheet';
+import { exportToExcel, buildExcelBuffer } from '@/lib/exportSpreadsheet';
 import { exportToWord } from '@/lib/exportWord';
 import { generateShareUrl, parseShareData, getViewPageBaseUrl, ShareResult } from '@/lib/shareLink';
 import ShareLinkModal from '@/components/ShareLinkModal';
+import { saveFileToDrive, getTargetFolder } from '@/lib/googleDrive';
+import { isGoogleConfigured, getAuthState, addAuthListener, GoogleAuthState } from '@/lib/googleAuth';
 
 function getYouTubeEmbedUrl(url: string): string | null {
   try {
@@ -33,6 +35,20 @@ function InstructionViewContent() {
   const [loading, setLoading] = useState(true);
   const [isSharedView, setIsSharedView] = useState(false);
   const [shareResult, setShareResult] = useState<ShareResult | null>(null);
+  const [auth, setAuth] = useState<GoogleAuthState>(getAuthState());
+  const [driveSaving, setDriveSaving] = useState(false);
+  const [driveMessage, setDriveMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  useEffect(() => {
+    if (!isGoogleConfigured()) return;
+    return addAuthListener(setAuth);
+  }, []);
+
+  useEffect(() => {
+    if (!driveMessage) return;
+    const timer = setTimeout(() => setDriveMessage(null), 3000);
+    return () => clearTimeout(timer);
+  }, [driveMessage]);
 
   useEffect(() => {
     // Priority 1: shared data in hash fragment
@@ -71,6 +87,27 @@ function InstructionViewContent() {
     const baseUrl = getViewPageBaseUrl();
     const result = generateShareUrl(instruction, baseUrl);
     setShareResult(result);
+  };
+
+  const handleExcelToDrive = async () => {
+    if (!instruction) return;
+    setDriveSaving(true);
+    try {
+      const buffer = await buildExcelBuffer(instruction);
+      const fileName = `${instruction.title}_手順書.xlsx`;
+      await saveFileToDrive(
+        buffer,
+        fileName,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      const folderName = getTargetFolder()?.name || 'WorkInstructions';
+      setDriveMessage({ text: `「${folderName}」に保存しました`, type: 'success' });
+    } catch (err) {
+      console.error('Drive save error:', err);
+      setDriveMessage({ text: 'Driveへの保存に失敗しました', type: 'error' });
+    } finally {
+      setDriveSaving(false);
+    }
   };
 
   const handleImport = () => {
@@ -143,6 +180,15 @@ function InstructionViewContent() {
         >
           Excel出力
         </button>
+        {isGoogleConfigured() && auth.isSignedIn && (
+          <button
+            onClick={handleExcelToDrive}
+            disabled={driveSaving}
+            className="px-3 py-1.5 bg-yellow-50 border border-yellow-300 text-yellow-800 rounded text-sm hover:bg-yellow-100 transition disabled:opacity-50"
+          >
+            {driveSaving ? '保存中...' : 'ExcelをDriveに保存'}
+          </button>
+        )}
         <button
           onClick={() => exportToWord(instruction)}
           className="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded text-sm hover:bg-blue-100 transition"
@@ -170,6 +216,11 @@ function InstructionViewContent() {
               削除
             </button>
           </>
+        )}
+        {driveMessage && (
+          <span className={`text-sm ${driveMessage.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+            {driveMessage.text}
+          </span>
         )}
       </div>
 

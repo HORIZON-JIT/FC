@@ -173,6 +173,63 @@ async function findFile(folderId: string): Promise<string | null> {
   return files.length > 0 ? files[0].id : null;
 }
 
+export async function saveFileToDrive(
+  buffer: ArrayBuffer,
+  fileName: string,
+  mimeType: string,
+): Promise<void> {
+  const folderId = await getTargetFolderId();
+
+  // Check if file already exists in the folder
+  const existingRes = await gapi.client.request<DriveFileList>({
+    path: 'https://www.googleapis.com/drive/v3/files',
+    params: {
+      q: `name='${fileName}' and '${folderId}' in parents and trashed=false`,
+      fields: 'files(id,name)',
+      supportsAllDrives: 'true',
+      includeItemsFromAllDrives: 'true',
+    },
+  });
+  const existingFileId = existingRes.result.files.length > 0 ? existingRes.result.files[0].id : null;
+
+  const boundary = '===boundary===';
+  const metadata = existingFileId
+    ? { name: fileName, mimeType }
+    : { name: fileName, mimeType, parents: [folderId] };
+
+  // Convert ArrayBuffer to base64
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const base64Data = btoa(binary);
+
+  const multipartBody =
+    `--${boundary}\r\n` +
+    `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+    `${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\n` +
+    `Content-Type: ${mimeType}\r\n` +
+    `Content-Transfer-Encoding: base64\r\n\r\n` +
+    `${base64Data}\r\n` +
+    `--${boundary}--`;
+
+  const path = existingFileId
+    ? `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}`
+    : 'https://www.googleapis.com/upload/drive/v3/files';
+
+  await gapi.client.request({
+    path,
+    method: existingFileId ? 'PATCH' : 'POST',
+    params: { uploadType: 'multipart', supportsAllDrives: 'true' },
+    headers: {
+      'Content-Type': `multipart/related; boundary=${boundary}`,
+    },
+    body: multipartBody,
+  });
+}
+
 export async function saveInstructionsToDrive(
   instructions: WorkInstruction[],
 ): Promise<void> {
