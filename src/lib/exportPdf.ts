@@ -2,8 +2,13 @@ import type jsPDF from 'jspdf';
 import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
 
 export async function exportToPdf(instruction: WorkInstruction): Promise<void> {
-  const pdf = await buildPdf(instruction);
-  pdf.save(`${instruction.title}.pdf`);
+  try {
+    const pdf = await buildPdf(instruction);
+    pdf.save(`${instruction.title}.pdf`);
+  } catch (err) {
+    console.error('exportToPdf failed:', err);
+    throw err;
+  }
 }
 
 export async function buildPdfBuffer(instruction: WorkInstruction): Promise<ArrayBuffer> {
@@ -283,9 +288,12 @@ async function buildPdf(instruction: WorkInstruction): Promise<jsPDF> {
     const canvas = await html2canvas(container, {
       scale: 2,
       useCORS: true,
-      allowTaint: true,
+      allowTaint: false,
       backgroundColor: '#FFFFFF',
+      logging: false,
     });
+
+    const imgDataUrl = canvas.toDataURL('image/jpeg', 0.95);
 
     const { default: jsPDF } = await import('jspdf');
     const pdf = new jsPDF('p', 'mm', 'a4');
@@ -299,7 +307,7 @@ async function buildPdf(instruction: WorkInstruction): Promise<jsPDF> {
     while (position < imgHeight) {
       if (pageIndex > 0) pdf.addPage();
       pdf.addImage(
-        canvas.toDataURL('image/jpeg', 0.95),
+        imgDataUrl,
         'JPEG',
         0,
         -position,

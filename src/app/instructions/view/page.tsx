@@ -92,6 +92,7 @@ function InstructionViewContent() {
   const handlePdfToDrive = async () => {
     if (!instruction) return;
     setDriveSaving(true);
+    setDriveMessage(null);
     try {
       const buffer = await buildPdfBuffer(instruction);
       const fileName = `${instruction.title}.pdf`;
@@ -99,8 +100,9 @@ function InstructionViewContent() {
       const folderName = getTargetFolder()?.name || 'WorkInstructions';
       setDriveMessage({ text: `「${folderName}」に保存しました`, type: 'success' });
     } catch (err) {
-      console.error('Drive save error:', err);
-      setDriveMessage({ text: 'Driveへの保存に失敗しました', type: 'error' });
+      console.error('Drive PDF save error:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setDriveMessage({ text: `Driveへの保存に失敗しました: ${msg}`, type: 'error' });
     } finally {
       setDriveSaving(false);
     }
@@ -108,11 +110,13 @@ function InstructionViewContent() {
 
   const handlePdfExport = async () => {
     if (!instruction) return;
+    setDriveMessage(null);
     try {
       await exportToPdf(instruction);
     } catch (err) {
       console.error('PDF export error:', err);
-      setDriveMessage({ text: 'PDF出力に失敗しました', type: 'error' });
+      const msg = err instanceof Error ? err.message : String(err);
+      setDriveMessage({ text: `PDF出力に失敗しました: ${msg}`, type: 'error' });
     }
   };
 
@@ -130,8 +134,9 @@ function InstructionViewContent() {
       const folderName = getTargetFolder()?.name || 'WorkInstructions';
       setDriveMessage({ text: `「${folderName}」に保存しました`, type: 'success' });
     } catch (err) {
-      console.error('Drive save error:', err);
-      setDriveMessage({ text: 'Driveへの保存に失敗しました', type: 'error' });
+      console.error('Drive Excel save error:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setDriveMessage({ text: `Driveへの保存に失敗しました: ${msg}`, type: 'error' });
     } finally {
       setDriveSaving(false);
     }

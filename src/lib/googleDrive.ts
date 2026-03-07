@@ -178,15 +178,17 @@ export async function saveFileToDrive(
   fileName: string,
   mimeType: string,
 ): Promise<void> {
-  const folderId = await getTargetFolderId();
   const token = gapi.client.getToken()?.access_token;
   if (!token) throw new Error('Google認証が必要です');
 
+  const folderId = await getTargetFolderId();
+
   // Check if file already exists in the folder
+  const escapedName = fileName.replace(/'/g, "\\'");
   const existingRes = await gapi.client.request<DriveFileList>({
     path: 'https://www.googleapis.com/drive/v3/files',
     params: {
-      q: `name='${fileName}' and '${folderId}' in parents and trashed=false`,
+      q: `name='${escapedName}' and '${folderId}' in parents and trashed=false`,
       fields: 'files(id,name)',
       supportsAllDrives: 'true',
       includeItemsFromAllDrives: 'true',
@@ -198,12 +200,26 @@ export async function saveFileToDrive(
     ? { name: fileName, mimeType }
     : { name: fileName, mimeType, parents: [folderId] };
 
-  const boundary = '===boundary_' + Date.now() + '===';
-  const metadataPart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`;
-  const filePart = `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`;
-  const endBoundary = `\r\n--${boundary}--`;
+  const boundary = 'boundary' + Date.now();
+  const metadataJson = JSON.stringify(metadata);
 
-  const body = new Blob([metadataPart, filePart, buffer, endBoundary]);
+  // Build multipart body using Uint8Array for correct binary handling
+  const encoder = new TextEncoder();
+  const metadataPart = encoder.encode(
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadataJson}\r\n`
+  );
+  const fileHeader = encoder.encode(
+    `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`
+  );
+  const closing = encoder.encode(`\r\n--${boundary}--`);
+  const fileBytes = new Uint8Array(buffer);
+
+  const body = new Uint8Array(metadataPart.length + fileHeader.length + fileBytes.length + closing.length);
+  let offset = 0;
+  body.set(metadataPart, offset); offset += metadataPart.length;
+  body.set(fileHeader, offset); offset += fileHeader.length;
+  body.set(fileBytes, offset); offset += fileBytes.length;
+  body.set(closing, offset);
 
   const url = existingFileId
     ? `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=multipart&supportsAllDrives=true`
@@ -215,34 +231,47 @@ export async function saveFileToDrive(
       Authorization: `Bearer ${token}`,
       'Content-Type': `multipart/related; boundary=${boundary}`,
     },
-    body,
+    body: body.buffer,
   });
 
   if (!res.ok) {
     const errorText = await res.text();
-    throw new Error(`Drive API error ${res.status}: ${errorText}`);
+    throw new Error(`Drive API ${res.status}: ${errorText}`);
   }
 }
 
 export async function saveInstructionsToDrive(
   instructions: WorkInstruction[],
 ): Promise<void> {
+  const token = gapi.client.getToken()?.access_token;
+  if (!token) throw new Error('Google認証が必要です');
+
   const folderId = await getTargetFolderId();
   const fileId = await findFile(folderId);
   const content = JSON.stringify(instructions, null, 2);
-  const token = gapi.client.getToken()?.access_token;
-  if (!token) throw new Error('Google認証が必要です');
 
   const metadata = fileId
     ? { name: FILE_NAME, mimeType: 'application/json' }
     : { name: FILE_NAME, mimeType: 'application/json', parents: [folderId] };
 
-  const boundary = '===boundary_' + Date.now() + '===';
-  const metadataPart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`;
-  const filePart = `--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n`;
-  const endBoundary = `\r\n--${boundary}--`;
+  const boundary = 'boundary' + Date.now();
+  const encoder = new TextEncoder();
 
-  const body = new Blob([metadataPart, filePart, endBoundary]);
+  const metadataPart = encoder.encode(
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`
+  );
+  const fileHeader = encoder.encode(
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`
+  );
+  const fileContent = encoder.encode(content);
+  const closing = encoder.encode(`\r\n--${boundary}--`);
+
+  const body = new Uint8Array(metadataPart.length + fileHeader.length + fileContent.length + closing.length);
+  let offset = 0;
+  body.set(metadataPart, offset); offset += metadataPart.length;
+  body.set(fileHeader, offset); offset += fileHeader.length;
+  body.set(fileContent, offset); offset += fileContent.length;
+  body.set(closing, offset);
 
   const url = fileId
     ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart&supportsAllDrives=true`
@@ -254,12 +283,12 @@ export async function saveInstructionsToDrive(
       Authorization: `Bearer ${token}`,
       'Content-Type': `multipart/related; boundary=${boundary}`,
     },
-    body,
+    body: body.buffer,
   });
 
   if (!res.ok) {
     const errorText = await res.text();
-    throw new Error(`Drive API error ${res.status}: ${errorText}`);
+    throw new Error(`Drive API ${res.status}: ${errorText}`);
   }
 }
 
