@@ -1,5 +1,4 @@
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
 
 export async function exportToPdf(instruction: WorkInstruction): Promise<void> {
@@ -280,6 +279,7 @@ async function buildPdf(instruction: WorkInstruction): Promise<jsPDF> {
       )
     );
 
+    const { default: html2canvas } = await import('html2canvas');
     const canvas = await html2canvas(container, {
       scale: 2,
       useCORS: true,
