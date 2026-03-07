@@ -24,21 +24,21 @@ export default function GoogleSignInButton() {
 
   if (auth.isSignedIn) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2.5">
         {auth.userPhoto && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={auth.userPhoto}
             alt=""
-            className="w-6 h-6 rounded-full"
+            className="w-6 h-6 rounded-full ring-2 ring-slate-600"
           />
         )}
-        <span className="text-sm text-blue-100 hidden lg:inline">
+        <span className="text-sm text-slate-300 hidden lg:inline">
           {auth.userName || auth.userEmail}
         </span>
         <button
           onClick={signOut}
-          className="px-2 py-1 text-xs bg-blue-700 rounded hover:bg-blue-800 transition"
+          className="px-2.5 py-1 text-xs text-slate-300 border border-slate-600 rounded-lg hover:bg-white/10 hover:text-white transition"
         >
           サインアウト
         </button>
@@ -49,7 +49,7 @@ export default function GoogleSignInButton() {
   return (
     <button
       onClick={signIn}
-      className="px-3 py-1.5 text-sm bg-white text-blue-600 rounded font-medium hover:bg-blue-50 transition flex items-center gap-1.5"
+      className="px-3 py-1.5 text-sm bg-white/10 text-white border border-slate-600 rounded-lg font-medium hover:bg-white/20 transition flex items-center gap-1.5"
     >
       <svg className="w-4 h-4" viewBox="0 0 24 24">
         <path
