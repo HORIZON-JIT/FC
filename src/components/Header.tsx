@@ -64,6 +64,9 @@ export default function Header() {
           >
             + 新規作成
           </Link>
+          <div className="px-3 py-2">
+            <GoogleSignInButton />
+          </div>
         </nav>
       )}
     </header>
