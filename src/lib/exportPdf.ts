@@ -2,6 +2,16 @@ import jsPDF from 'jspdf';
 import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
 
 export async function exportToPdf(instruction: WorkInstruction): Promise<void> {
+  const pdf = await buildPdf(instruction);
+  pdf.save(`${instruction.title}.pdf`);
+}
+
+export async function buildPdfBuffer(instruction: WorkInstruction): Promise<ArrayBuffer> {
+  const pdf = await buildPdf(instruction);
+  return pdf.output('arraybuffer');
+}
+
+async function buildPdf(instruction: WorkInstruction): Promise<jsPDF> {
   const pdf = new jsPDF('p', 'mm', 'a4');
   const pageWidth = pdf.internal.pageSize.getWidth();
   const margin = 15;
@@ -109,5 +119,5 @@ export async function exportToPdf(instruction: WorkInstruction): Promise<void> {
     y += 5;
   }
 
-  pdf.save(`${instruction.title}.pdf`);
+  return pdf;
 }
