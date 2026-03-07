@@ -3,7 +3,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   DriveFolder,
+  DriveLocation,
   listFolders,
+  listSharedDrives,
+  listSharedWithMeFolders,
   createNewFolder,
   getTargetFolder,
   setTargetFolder,
@@ -20,18 +23,29 @@ interface BreadcrumbItem {
   name: string;
 }
 
+const LOCATION_LABELS: Record<DriveLocation, string> = {
+  'my-drive': 'マイドライブ',
+  'shared-drives': '共有ドライブ',
+  'shared-with-me': '共有アイテム',
+};
+
 export default function DriveFolderPicker({ open, onClose, onSelect }: DriveFolderPickerProps) {
   const [folders, setFolders] = useState<DriveFolder[]>([]);
   const [loading, setLoading] = useState(false);
+  const [location, setLocation] = useState<DriveLocation>('my-drive');
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbItem[]>([{ id: undefined, name: 'マイドライブ' }]);
   const [creating, setCreating] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  // Track if we're browsing inside a shared drive (for driveId param)
+  const [currentDriveId, setCurrentDriveId] = useState<string | undefined>(undefined);
+  // Track if we're at the shared drives list level (not yet inside one)
+  const [isSharedDrivesList, setIsSharedDrivesList] = useState(false);
   const currentParentId = breadcrumbs[breadcrumbs.length - 1].id;
 
-  const loadFolders = useCallback(async (parentId?: string) => {
+  const loadFolderList = useCallback(async (parentId?: string, driveId?: string) => {
     setLoading(true);
     try {
-      const result = await listFolders(parentId);
+      const result = await listFolders(parentId, driveId ? { driveId } : undefined);
       setFolders(result);
     } catch (err) {
       console.error('Failed to list folders:', err);
@@ -41,22 +55,101 @@ export default function DriveFolderPicker({ open, onClose, onSelect }: DriveFold
     }
   }, []);
 
-  useEffect(() => {
-    if (open) {
-      setBreadcrumbs([{ id: undefined, name: 'マイドライブ' }]);
-      loadFolders(undefined);
+  const loadSharedDrives = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await listSharedDrives();
+      setFolders(result);
+    } catch (err) {
+      console.error('Failed to list shared drives:', err);
+      setFolders([]);
+    } finally {
+      setLoading(false);
     }
-  }, [open, loadFolders]);
+  }, []);
+
+  const loadSharedWithMe = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await listSharedWithMeFolders();
+      setFolders(result);
+    } catch (err) {
+      console.error('Failed to list shared folders:', err);
+      setFolders([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const switchLocation = useCallback((loc: DriveLocation) => {
+    setLocation(loc);
+    setCurrentDriveId(undefined);
+    setIsSharedDrivesList(false);
+    const rootName = LOCATION_LABELS[loc];
+    setBreadcrumbs([{ id: undefined, name: rootName }]);
+
+    if (loc === 'my-drive') {
+      // Will be loaded by effect
+    } else if (loc === 'shared-drives') {
+      setIsSharedDrivesList(true);
+    }
+    // shared-with-me also loaded by effect
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    setLocation('my-drive');
+    setCurrentDriveId(undefined);
+    setIsSharedDrivesList(false);
+    setBreadcrumbs([{ id: undefined, name: 'マイドライブ' }]);
+    loadFolderList(undefined);
+  }, [open, loadFolderList]);
+
+  // Load folders when location changes
+  useEffect(() => {
+    if (!open) return;
+    if (location === 'my-drive') {
+      loadFolderList(undefined);
+    } else if (location === 'shared-drives') {
+      loadSharedDrives();
+    } else if (location === 'shared-with-me') {
+      loadSharedWithMe();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location]);
 
   const navigateInto = (folder: DriveFolder) => {
+    if (isSharedDrivesList) {
+      // Entering a shared drive - set driveId and browse its root
+      setIsSharedDrivesList(false);
+      setCurrentDriveId(folder.id);
+      setBreadcrumbs([
+        { id: undefined, name: LOCATION_LABELS['shared-drives'] },
+        { id: folder.id, name: folder.name },
+      ]);
+      loadFolderList(folder.id, folder.id);
+      return;
+    }
+
     setBreadcrumbs((prev) => [...prev, { id: folder.id, name: folder.name }]);
-    loadFolders(folder.id);
+    loadFolderList(folder.id, currentDriveId);
   };
 
   const navigateTo = (index: number) => {
     const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
     setBreadcrumbs(newBreadcrumbs);
-    loadFolders(newBreadcrumbs[newBreadcrumbs.length - 1].id);
+    const targetId = newBreadcrumbs[newBreadcrumbs.length - 1].id;
+
+    if (location === 'shared-drives' && index === 0) {
+      // Back to shared drives list
+      setIsSharedDrivesList(true);
+      setCurrentDriveId(undefined);
+      loadSharedDrives();
+    } else if (location === 'shared-with-me' && index === 0) {
+      loadSharedWithMe();
+    } else {
+      loadFolderList(targetId, currentDriveId);
+    }
   };
 
   const handleSelectCurrent = () => {
@@ -80,7 +173,13 @@ export default function DriveFolderPicker({ open, onClose, onSelect }: DriveFold
       const created = await createNewFolder(newFolderName.trim(), currentParentId);
       setNewFolderName('');
       // Refresh folder list
-      await loadFolders(currentParentId);
+      if (isSharedDrivesList) {
+        await loadSharedDrives();
+      } else if (location === 'shared-with-me' && !currentParentId) {
+        await loadSharedWithMe();
+      } else {
+        await loadFolderList(currentParentId, currentDriveId);
+      }
       // Navigate into new folder
       navigateInto(created);
     } catch (err) {
@@ -113,6 +212,23 @@ export default function DriveFolderPicker({ open, onClose, onSelect }: DriveFold
           )}
         </div>
 
+        {/* Location tabs */}
+        <div className="px-2 sm:px-4 py-2 border-b border-gray-200 flex gap-1">
+          {(['my-drive', 'shared-drives', 'shared-with-me'] as DriveLocation[]).map((loc) => (
+            <button
+              key={loc}
+              onClick={() => switchLocation(loc)}
+              className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium transition ${
+                location === loc
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+              }`}
+            >
+              {LOCATION_LABELS[loc]}
+            </button>
+          ))}
+        </div>
+
         {/* Breadcrumbs */}
         <div className="px-4 py-2 border-b border-gray-100 flex items-center gap-1 text-sm overflow-x-auto">
           {breadcrumbs.map((crumb, i) => (
@@ -140,7 +256,7 @@ export default function DriveFolderPicker({ open, onClose, onSelect }: DriveFold
             </div>
           ) : folders.length === 0 ? (
             <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
-              フォルダがありません
+              {isSharedDrivesList ? '共有ドライブがありません' : 'フォルダがありません'}
             </div>
           ) : (
             <ul className="space-y-1">
@@ -150,7 +266,9 @@ export default function DriveFolderPicker({ open, onClose, onSelect }: DriveFold
                     onClick={() => navigateInto(folder)}
                     className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 flex items-center gap-2 text-sm transition"
                   >
-                    <span className="text-yellow-500 text-lg">📁</span>
+                    <span className="text-yellow-500 text-lg">
+                      {isSharedDrivesList ? '🖥️' : '📁'}
+                    </span>
                     <span className="text-gray-700 truncate">{folder.name}</span>
                   </button>
                 </li>
@@ -159,26 +277,28 @@ export default function DriveFolderPicker({ open, onClose, onSelect }: DriveFold
           )}
         </div>
 
-        {/* New folder */}
-        <div className="px-4 py-2 border-t border-gray-100">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
-              placeholder="新しいフォルダ名..."
-              className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-            />
-            <button
-              onClick={handleCreateFolder}
-              disabled={creating || !newFolderName.trim()}
-              className="px-3 py-1 bg-blue-500 text-white rounded text-sm font-medium hover:bg-blue-600 transition disabled:opacity-50"
-            >
-              {creating ? '作成中...' : '作成'}
-            </button>
+        {/* New folder - hide when at shared drives list level */}
+        {!isSharedDrivesList && (
+          <div className="px-4 py-2 border-t border-gray-100">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
+                placeholder="新しいフォルダ名..."
+                className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              />
+              <button
+                onClick={handleCreateFolder}
+                disabled={creating || !newFolderName.trim()}
+                className="px-3 py-1 bg-blue-500 text-white rounded text-sm font-medium hover:bg-blue-600 transition disabled:opacity-50"
+              >
+                {creating ? '作成中...' : '作成'}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Actions */}
         <div className="px-3 sm:px-4 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
@@ -197,7 +317,8 @@ export default function DriveFolderPicker({ open, onClose, onSelect }: DriveFold
             </button>
             <button
               onClick={handleSelectCurrent}
-              className="px-3 sm:px-4 py-2 bg-yellow-500 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-yellow-600 transition"
+              disabled={isSharedDrivesList}
+              className="px-3 sm:px-4 py-2 bg-yellow-500 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-yellow-600 transition disabled:opacity-50"
             >
               このフォルダを選択
             </button>
