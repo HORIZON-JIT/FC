@@ -3,8 +3,8 @@ import './globals.css';
 import Header from '@/components/Header';
 
 export const metadata: Metadata = {
-  title: '作業手順書アプリ',
-  description: 'PC事務作業・梱包作業の手順書を作成・管理するアプリケーション',
+  title: '手順書作成システム',
+  description: '業務手順書を作成・管理・共有するシステム',
 };
 
 export default function RootLayout({
@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja">
-      <body className="bg-gray-50 min-h-screen">
+      <body className="bg-slate-50 min-h-screen">
         <Header />
         <main>{children}</main>
       </body>
