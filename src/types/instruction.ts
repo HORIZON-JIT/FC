@@ -6,6 +6,7 @@ export interface Step {
   /** @deprecated Use imageDataUrls instead */
   imageDataUrl?: string;
   imageDataUrls?: string[];
+  imageCaptions?: string[];
   videoUrl?: string;
   caution?: string;
 }
@@ -15,6 +16,11 @@ export function getStepImages(step: Step): string[] {
   if (step.imageDataUrls && step.imageDataUrls.length > 0) return step.imageDataUrls;
   if (step.imageDataUrl) return [step.imageDataUrl];
   return [];
+}
+
+/** Get caption for image at index */
+export function getImageCaption(step: Step, index: number): string {
+  return step.imageCaptions?.[index] ?? '';
 }
 
 export type Category = 'pc_work' | 'packing';
