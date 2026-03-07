@@ -1,4 +1,4 @@
-import jsPDF from 'jspdf';
+import type jsPDF from 'jspdf';
 import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
 
 export async function exportToPdf(instruction: WorkInstruction): Promise<void> {
@@ -287,6 +287,7 @@ async function buildPdf(instruction: WorkInstruction): Promise<jsPDF> {
       backgroundColor: '#FFFFFF',
     });
 
+    const { default: jsPDF } = await import('jspdf');
     const pdf = new jsPDF('p', 'mm', 'a4');
     const imgWidth = 210;
     const imgHeight = (canvas.height / canvas.width) * imgWidth;
