@@ -240,7 +240,7 @@ export async function saveInstructionsToDrive(
   const boundary = '===boundary_' + Date.now() + '===';
   const metadataPart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`;
   const filePart = `--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n`;
-  const endBoundary = `--${boundary}--`;
+  const endBoundary = `\r\n--${boundary}--`;
 
   const body = new Blob([metadataPart, filePart, endBoundary]);
 

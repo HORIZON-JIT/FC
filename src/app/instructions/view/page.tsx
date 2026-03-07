@@ -106,6 +106,16 @@ function InstructionViewContent() {
     }
   };
 
+  const handlePdfExport = async () => {
+    if (!instruction) return;
+    try {
+      await exportToPdf(instruction);
+    } catch (err) {
+      console.error('PDF export error:', err);
+      setDriveMessage({ text: 'PDF出力に失敗しました', type: 'error' });
+    }
+  };
+
   const handleExcelToDrive = async () => {
     if (!instruction) return;
     setDriveSaving(true);
@@ -186,7 +196,7 @@ function InstructionViewContent() {
           印刷
         </button>
         <button
-          onClick={() => exportToPdf(instruction)}
+          onClick={handlePdfExport}
           className="px-3 py-1.5 bg-red-50 border border-red-200 text-red-700 rounded text-sm hover:bg-red-100 transition"
         >
           PDF出力
