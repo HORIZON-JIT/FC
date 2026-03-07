@@ -49,6 +49,16 @@ function parseDataUrl(dataUrl: string): { base64: string; extension: 'png' | 'jp
   return { base64, extension };
 }
 
+/** Get natural pixel dimensions of an image from its data URL */
+function getImageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => resolve({ width: 4, height: 3 }); // fallback to 4:3
+    img.src = dataUrl;
+  });
+}
+
 function downloadBuffer(buffer: ArrayBuffer, filename: string) {
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -338,11 +348,20 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
     // --- Images ---
     const stepImages = getStepImages(step);
     for (let imgIdx = 0; imgIdx < stepImages.length; imgIdx++) {
-      const IMAGE_ROWS = 12;
       const IMAGE_ROW_HEIGHT = 18;
+      const CONTENT_WIDTH_PX = 480; // approximate pixel width of columns C-G
+      const MIN_IMAGE_ROWS = 6;
+      const MAX_IMAGE_ROWS = 22;
+
+      // Calculate row count dynamically based on image aspect ratio
+      const dims = await getImageDimensions(stepImages[imgIdx]);
+      const aspectRatio = dims.height / dims.width;
+      const fitHeightPx = CONTENT_WIDTH_PX * aspectRatio;
+      const imageRows = Math.min(MAX_IMAGE_ROWS, Math.max(MIN_IMAGE_ROWS, Math.round(fitHeightPx / IMAGE_ROW_HEIGHT)));
+
       const imageStartRow = row;
 
-      for (let r = 0; r < IMAGE_ROWS; r++) {
+      for (let r = 0; r < imageRows; r++) {
         ws.getRow(imageStartRow + r).height = IMAGE_ROW_HEIGHT;
         // A: accent stripe continuation
         const aCell = ws.getCell(imageStartRow + r, 1);
@@ -362,11 +381,11 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
       labelCell.alignment = { horizontal: 'center', vertical: 'top' };
 
       // Merge image region C-G only (not B)
-      ws.mergeCells(imageStartRow, 3, imageStartRow + IMAGE_ROWS - 1, LAST_COL);
+      ws.mergeCells(imageStartRow, 3, imageStartRow + imageRows - 1, LAST_COL);
       const imgCell = ws.getCell(imageStartRow, 3);
       imgCell.fill = solidFill(C.grayLight);
       imgCell.alignment = { vertical: 'middle', horizontal: 'center' };
-      for (let r = imageStartRow; r < imageStartRow + IMAGE_ROWS; r++) {
+      for (let r = imageStartRow; r < imageStartRow + imageRows; r++) {
         for (let c = 3; c <= LAST_COL; c++) {
           setBoxBorder(ws.getCell(r, c), { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER });
         }
@@ -377,10 +396,10 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ws.addImage(imageId, {
         tl: { col: 2.2, row: imageStartRow - 1 + 0.3 },
-        br: { col: LAST_COL - 0.3, row: imageStartRow - 1 + IMAGE_ROWS - 0.3 },
+        br: { col: LAST_COL - 0.3, row: imageStartRow - 1 + imageRows - 0.3 },
       } as any);
 
-      row = imageStartRow + IMAGE_ROWS;
+      row = imageStartRow + imageRows;
 
       // Caption row
       const caption = getImageCaption(step, imgIdx);
