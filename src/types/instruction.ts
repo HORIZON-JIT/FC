@@ -3,9 +3,18 @@ export interface Step {
   orderIndex: number;
   title: string;
   description: string;
+  /** @deprecated Use imageDataUrls instead */
   imageDataUrl?: string;
+  imageDataUrls?: string[];
   videoUrl?: string;
   caution?: string;
+}
+
+/** Get all image data URLs for a step (handles legacy single-image field) */
+export function getStepImages(step: Step): string[] {
+  if (step.imageDataUrls && step.imageDataUrls.length > 0) return step.imageDataUrls;
+  if (step.imageDataUrl) return [step.imageDataUrl];
+  return [];
 }
 
 export type Category = 'pc_work' | 'packing';

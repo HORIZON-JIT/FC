@@ -15,7 +15,7 @@ import {
   ExternalHyperlink,
 } from 'docx';
 import { saveAs } from 'file-saver';
-import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
+import { WorkInstruction, CATEGORY_LABELS, getStepImages } from '@/types/instruction';
 
 function parseDataUrl(dataUrl: string): { buffer: Uint8Array; extension: 'png' | 'jpg' } {
   const match = dataUrl.match(/^data:image\/(png|jpe?g|gif|webp);base64,(.+)$/);
@@ -77,7 +77,7 @@ function createStepHeaderTable(index: number, title: string): Table {
                     bold: true,
                     size: 28,
                     color: COLORS.white,
-                    font: 'Meiryo',
+                    font: 'Arial',
                   }),
                 ],
               }),
@@ -96,7 +96,7 @@ function createStepHeaderTable(index: number, title: string): Table {
                     bold: true,
                     size: 24,
                     color: COLORS.dark,
-                    font: 'Meiryo',
+                    font: 'Arial',
                   }),
                 ],
               }),
@@ -124,7 +124,7 @@ export async function exportToWord(instruction: WorkInstruction): Promise<void> 
           bold: true,
           size: 36,
           color: COLORS.white,
-          font: 'Meiryo',
+          font: 'Arial',
         }),
       ],
     }),
@@ -140,13 +140,13 @@ export async function exportToWord(instruction: WorkInstruction): Promise<void> 
           text: `カテゴリ：${CATEGORY_LABELS[instruction.category]}`,
           size: 20,
           color: COLORS.dark,
-          font: 'Meiryo',
+          font: 'Arial',
         }),
         new TextRun({
           text: `　　作成：${new Date(instruction.createdAt).toLocaleDateString('ja-JP')}　更新：${new Date(instruction.updatedAt).toLocaleDateString('ja-JP')}`,
           size: 18,
           color: COLORS.gray,
-          font: 'Meiryo',
+          font: 'Arial',
         }),
       ],
     }),
@@ -162,7 +162,7 @@ export async function exportToWord(instruction: WorkInstruction): Promise<void> 
             text: instruction.description,
             size: 21,
             color: COLORS.dark,
-            font: 'Meiryo',
+            font: 'Arial',
           }),
         ],
       }),
@@ -199,16 +199,16 @@ export async function exportToWord(instruction: WorkInstruction): Promise<void> 
               text: step.description,
               size: 21,
               color: COLORS.dark,
-              font: 'Meiryo',
+              font: 'Arial',
             }),
           ],
         }),
       );
     }
 
-    // Image
-    if (step.imageDataUrl) {
-      const { buffer, extension } = parseDataUrl(step.imageDataUrl);
+    // Images
+    for (const imageUrl of getStepImages(step)) {
+      const { buffer, extension } = parseDataUrl(imageUrl);
       if (buffer.length > 0) {
         children.push(
           new Paragraph({
@@ -241,7 +241,7 @@ export async function exportToWord(instruction: WorkInstruction): Promise<void> 
               bold: true,
               size: 20,
               color: COLORS.cautionText,
-              font: 'Meiryo',
+              font: 'Arial',
             }),
           ],
         }),
@@ -258,7 +258,7 @@ export async function exportToWord(instruction: WorkInstruction): Promise<void> 
               text: '動画：',
               size: 18,
               color: COLORS.gray,
-              font: 'Meiryo',
+              font: 'Arial',
             }),
             new ExternalHyperlink({
               link: step.videoUrl,
@@ -268,7 +268,7 @@ export async function exportToWord(instruction: WorkInstruction): Promise<void> 
                   size: 18,
                   color: COLORS.primary,
                   underline: {},
-                  font: 'Meiryo',
+                  font: 'Arial',
                 }),
               ],
             }),
@@ -289,7 +289,7 @@ export async function exportToWord(instruction: WorkInstruction): Promise<void> 
           size: 18,
           color: COLORS.gray,
           italics: true,
-          font: 'Meiryo',
+          font: 'Arial',
         }),
       ],
     }),
