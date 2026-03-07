@@ -179,6 +179,8 @@ export async function saveFileToDrive(
   mimeType: string,
 ): Promise<void> {
   const folderId = await getTargetFolderId();
+  const token = gapi.client.getToken()?.access_token;
+  if (!token) throw new Error('Google認証が必要です');
 
   // Check if file already exists in the folder
   const existingRes = await gapi.client.request<DriveFileList>({
@@ -192,42 +194,34 @@ export async function saveFileToDrive(
   });
   const existingFileId = existingRes.result.files.length > 0 ? existingRes.result.files[0].id : null;
 
-  const boundary = '===boundary===';
   const metadata = existingFileId
     ? { name: fileName, mimeType }
     : { name: fileName, mimeType, parents: [folderId] };
 
-  // Convert ArrayBuffer to base64
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  const base64Data = btoa(binary);
+  const boundary = '===boundary_' + Date.now() + '===';
+  const metadataPart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`;
+  const filePart = `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`;
+  const endBoundary = `\r\n--${boundary}--`;
 
-  const multipartBody =
-    `--${boundary}\r\n` +
-    `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
-    `${JSON.stringify(metadata)}\r\n` +
-    `--${boundary}\r\n` +
-    `Content-Type: ${mimeType}\r\n` +
-    `Content-Transfer-Encoding: base64\r\n\r\n` +
-    `${base64Data}\r\n` +
-    `--${boundary}--`;
+  const body = new Blob([metadataPart, filePart, buffer, endBoundary]);
 
-  const path = existingFileId
-    ? `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}`
-    : 'https://www.googleapis.com/upload/drive/v3/files';
+  const url = existingFileId
+    ? `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=multipart&supportsAllDrives=true`
+    : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true';
 
-  await gapi.client.request({
-    path,
+  const res = await fetch(url, {
     method: existingFileId ? 'PATCH' : 'POST',
-    params: { uploadType: 'multipart', supportsAllDrives: 'true' },
     headers: {
+      Authorization: `Bearer ${token}`,
       'Content-Type': `multipart/related; boundary=${boundary}`,
     },
-    body: multipartBody,
+    body,
   });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Drive API error ${res.status}: ${errorText}`);
+  }
 }
 
 export async function saveInstructionsToDrive(
@@ -236,34 +230,37 @@ export async function saveInstructionsToDrive(
   const folderId = await getTargetFolderId();
   const fileId = await findFile(folderId);
   const content = JSON.stringify(instructions, null, 2);
+  const token = gapi.client.getToken()?.access_token;
+  if (!token) throw new Error('Google認証が必要です');
 
-  const boundary = '===boundary===';
   const metadata = fileId
     ? { name: FILE_NAME, mimeType: 'application/json' }
     : { name: FILE_NAME, mimeType: 'application/json', parents: [folderId] };
 
-  const multipartBody =
-    `--${boundary}\r\n` +
-    `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
-    `${JSON.stringify(metadata)}\r\n` +
-    `--${boundary}\r\n` +
-    `Content-Type: application/json\r\n\r\n` +
-    `${content}\r\n` +
-    `--${boundary}--`;
+  const boundary = '===boundary_' + Date.now() + '===';
+  const metadataPart = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`;
+  const filePart = `--${boundary}\r\nContent-Type: application/json\r\n\r\n${content}\r\n`;
+  const endBoundary = `--${boundary}--`;
 
-  const path = fileId
-    ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}`
-    : 'https://www.googleapis.com/upload/drive/v3/files';
+  const body = new Blob([metadataPart, filePart, endBoundary]);
 
-  await gapi.client.request({
-    path,
+  const url = fileId
+    ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart&supportsAllDrives=true`
+    : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true';
+
+  const res = await fetch(url, {
     method: fileId ? 'PATCH' : 'POST',
-    params: { uploadType: 'multipart', supportsAllDrives: 'true' },
     headers: {
+      Authorization: `Bearer ${token}`,
       'Content-Type': `multipart/related; boundary=${boundary}`,
     },
-    body: multipartBody,
+    body,
   });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Drive API error ${res.status}: ${errorText}`);
+  }
 }
 
 export async function loadInstructionsFromDrive(): Promise<WorkInstruction[] | null> {
