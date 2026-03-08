@@ -357,7 +357,9 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
     // --- Images ---
     const stepImages = getStepImages(step);
     for (let imgIdx = 0; imgIdx < stepImages.length; imgIdx++) {
-      const IMAGE_ROW_HEIGHT = 18;
+      const IMAGE_ROW_HEIGHT = 18; // points
+      const PX_PER_PT = 1.33; // 1 Excel point ≈ 1.33 pixels
+      const IMAGE_ROW_HEIGHT_PX = IMAGE_ROW_HEIGHT * PX_PER_PT;
       const MAX_IMG_WIDTH = 700;
       const MAX_IMG_HEIGHT = 500;
 
@@ -374,8 +376,8 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
         imgH = MAX_IMG_HEIGHT;
       }
 
-      // Row count based on actual pixel height
-      const imageRows = Math.max(4, Math.ceil((imgH + 10) / IMAGE_ROW_HEIGHT));
+      // Row count: convert pixel height to Excel row count using pt-to-px ratio
+      const imageRows = Math.max(3, Math.ceil(imgH / IMAGE_ROW_HEIGHT_PX) + 1);
 
       const imageStartRow = row;
 
