@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { WorkInstruction } from '@/types/instruction';
 import { saveInstruction } from '@/lib/storage';
-import DriveSyncButtons from '@/components/DriveSyncButtons';
 
 export default function HomePage() {
   const router = useRouter();
@@ -120,10 +119,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Drive sync (secondary) */}
-      <div className="flex justify-center">
-        <DriveSyncButtons onDataLoaded={() => {}} />
-      </div>
     </div>
   );
 }
