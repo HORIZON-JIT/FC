@@ -36,19 +36,6 @@ function saveLastAuthorName(name: string) {
   }
 }
 
-function downloadJson(instruction: WorkInstruction) {
-  const json = JSON.stringify(instruction, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${instruction.title || '手順書'}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
 export default function InstructionForm({ initialData }: InstructionFormProps) {
   const router = useRouter();
   const isEdit = !!initialData;
@@ -195,7 +182,6 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
       console.error('Drive save error:', err);
       const msg = err instanceof Error ? err.message : String(err);
       setSaveMessage({ text: `Driveへの保存に失敗: ${msg}`, type: 'error' });
-      downloadJson(instruction);
     } finally {
       setSaving(false);
     }
@@ -205,28 +191,21 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
     const instruction = buildInstruction('completed');
     if (!instruction) return;
 
-    // Save locally first
-    try {
-      saveInstruction(instruction);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : '保存に失敗しました。');
+    // 1. Googleログインチェック
+    if (!isGoogleConfigured() || !getAuthState().isSignedIn) {
+      alert('Googleにログインしてください。ヘッダーの「Google Drive」ボタンからログインできます。');
       return;
     }
 
-    // Check Google auth
-    const auth = getAuthState();
-    if (isGoogleConfigured() && auth.isSignedIn) {
-      const targetFolder = getTargetFolder();
-      if (!targetFolder) {
-        alert('Driveフォルダが指定されていません。ヘッダーのフォルダボタンから設定してください。');
-        return;
-      }
-      saveToFolder(instruction);
-    } else {
-      // No Google auth — download JSON locally
-      downloadJson(instruction);
-      router.push('/');
+    // 2. 保存フォルダチェック
+    const targetFolder = getTargetFolder();
+    if (!targetFolder) {
+      alert('Driveフォルダが指定されていません。ヘッダーのフォルダボタンから設定してください。');
+      return;
     }
+
+    // 3. Google Driveに保存
+    saveToFolder(instruction);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
