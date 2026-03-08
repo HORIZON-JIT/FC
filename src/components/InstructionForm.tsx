@@ -6,9 +6,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { WorkInstruction, Step, Category, CATEGORY_LABELS, UpdateHistoryEntry, InstructionStatus } from '@/types/instruction';
 import { saveInstruction } from '@/lib/storage';
 import { buildExcelBuffer } from '@/lib/exportSpreadsheet';
-import { saveFileToDrive, getTargetFolder } from '@/lib/googleDrive';
+import { saveFileToDrive, getTargetFolder, DriveFolder } from '@/lib/googleDrive';
 import { isGoogleConfigured, getAuthState } from '@/lib/googleAuth';
 import StepEditor from './StepEditor';
+import DriveFolderPicker from './DriveFolderPicker';
 
 const LAST_AUTHOR_KEY = 'last_author_name';
 
@@ -147,6 +148,8 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
 
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [showFolderPicker, setShowFolderPicker] = useState(false);
+  const [pendingInstruction, setPendingInstruction] = useState<WorkInstruction | null>(null);
 
   const handleDraftSave = () => {
     const instruction = buildInstruction('draft');
@@ -161,7 +164,7 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
     router.push('/instructions/drafts');
   };
 
-  const handleComplete = async () => {
+  const handleCompleteClick = () => {
     const instruction = buildInstruction('completed');
     if (!instruction) return;
 
@@ -173,49 +176,65 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
       return;
     }
 
-    // Upload to Google Drive
+    // Check Google auth
     const auth = getAuthState();
     if (isGoogleConfigured() && auth.isSignedIn) {
-      setSaving(true);
-      setSaveMessage(null);
-      try {
-        // Upload Excel
-        const excelBuffer = await buildExcelBuffer(instruction);
-        await saveFileToDrive(
-          excelBuffer,
-          `${instruction.title}_手順書.xlsx`,
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        );
-        // Upload JSON
-        const jsonStr = JSON.stringify(instruction, null, 2);
-        const jsonBuffer = new TextEncoder().encode(jsonStr).buffer;
-        await saveFileToDrive(
-          jsonBuffer,
-          `${instruction.title}.json`,
-          'application/json',
-        );
-        const folderName = getTargetFolder()?.name || 'WorkInstructions';
-        setSaveMessage({ text: `「${folderName}」にExcel・JSONを保存しました`, type: 'success' });
-      } catch (err) {
-        console.error('Drive save error:', err);
-        const msg = err instanceof Error ? err.message : String(err);
-        setSaveMessage({ text: `Driveへの保存に失敗: ${msg}`, type: 'error' });
-        // Still download JSON locally as fallback
-        downloadJson(instruction);
-      } finally {
-        setSaving(false);
-      }
+      // Show folder picker popup
+      setPendingInstruction(instruction);
+      setShowFolderPicker(true);
     } else {
       // No Google auth — download JSON locally
       downloadJson(instruction);
+      router.push('/');
     }
+  };
 
-    router.push(`/instructions/view?id=${instruction.id}`);
+  const handleFolderSelected = async (_folder: DriveFolder | null) => {
+    // Folder has been set by DriveFolderPicker via setTargetFolder
+    setShowFolderPicker(false);
+    if (!pendingInstruction) return;
+
+    setSaving(true);
+    setSaveMessage(null);
+    try {
+      // Upload Excel
+      const excelBuffer = await buildExcelBuffer(pendingInstruction);
+      await saveFileToDrive(
+        excelBuffer,
+        `${pendingInstruction.title}_手順書.xlsx`,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      // Upload JSON
+      const jsonStr = JSON.stringify(pendingInstruction, null, 2);
+      const jsonBuffer = new TextEncoder().encode(jsonStr).buffer;
+      await saveFileToDrive(
+        jsonBuffer,
+        `${pendingInstruction.title}.json`,
+        'application/json',
+      );
+      const folderName = getTargetFolder()?.name || 'WorkInstructions';
+      setSaveMessage({ text: `「${folderName}」にExcel・JSONを保存しました`, type: 'success' });
+      // Navigate home after short delay so user sees the message
+      setTimeout(() => router.push('/'), 1500);
+    } catch (err) {
+      console.error('Drive save error:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setSaveMessage({ text: `Driveへの保存に失敗: ${msg}`, type: 'error' });
+      downloadJson(pendingInstruction);
+    } finally {
+      setSaving(false);
+      setPendingInstruction(null);
+    }
+  };
+
+  const handleFolderPickerClose = () => {
+    setShowFolderPicker(false);
+    setPendingInstruction(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    handleComplete();
+    handleCompleteClick();
   };
 
   return (
@@ -353,9 +372,16 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
           </p>
         )}
         <p className="text-xs text-slate-400 text-center">
-          「完成」を押すとGoogleドライブにExcel・JSONを出力します
+          「完成」を押すと保存先フォルダを確認後、GoogleドライブにExcel・JSONを出力します
         </p>
       </div>
+
+      {/* Folder Picker Popup */}
+      <DriveFolderPicker
+        open={showFolderPicker}
+        onClose={handleFolderPickerClose}
+        onSelect={handleFolderSelected}
+      />
     </form>
   );
 }
