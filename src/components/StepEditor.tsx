@@ -76,6 +76,34 @@ export default function StepEditor({
       .catch(() => alert('画像の処理に失敗しました。'));
   }, [addImage]);
 
+  const handleScreenCapture = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+      });
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.autoplay = true;
+      await new Promise<void>((resolve) => {
+        video.onloadeddata = () => resolve();
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(video, 0, 0);
+      stream.getTracks().forEach((t) => t.stop());
+      video.srcObject = null;
+      const blob = await new Promise<Blob>((resolve) =>
+        canvas.toBlob((b) => resolve(b!), 'image/png')
+      );
+      const file = new File([blob], 'screenshot.png', { type: 'image/png' });
+      processImageFile(file);
+    } catch {
+      // ユーザーがキャンセルした場合は何もしない
+    }
+  }, [processImageFile]);
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -229,7 +257,7 @@ export default function StepEditor({
           )}
 
           {/* Action buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -239,6 +267,17 @@ export default function StepEditor({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               画像を追加
+            </button>
+            <button
+              type="button"
+              onClick={handleScreenCapture}
+              className="flex items-center gap-1.5 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-600 hover:bg-green-100 transition"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              スクショ撮影
             </button>
             <span className="text-xs text-gray-400">
               Ctrl+V でスクショ貼り付けも可能
