@@ -1,0 +1,103 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
+import { getAllInstructions, deleteInstruction } from '@/lib/storage';
+
+export default function DraftsPage() {
+  const [drafts, setDrafts] = useState<WorkInstruction[]>([]);
+
+  useEffect(() => {
+    const all = getAllInstructions();
+    // Show drafts (status === 'draft' or status is undefined for legacy data)
+    const draftList = all
+      .filter((inst) => !inst.status || inst.status === 'draft')
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    setDrafts(draftList);
+  }, []);
+
+  const handleDelete = (id: string, title: string) => {
+    if (!confirm(`「${title}」を削除しますか？`)) return;
+    deleteInstruction(id);
+    setDrafts((prev) => prev.filter((d) => d.id !== id));
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="flex items-center gap-3 mb-8">
+        <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 transition">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          戻る
+        </Link>
+        <h1 className="text-2xl font-bold text-slate-800">途中から編集</h1>
+        <span className="text-sm text-slate-400 ml-1">{drafts.length} 件</span>
+      </div>
+
+      {drafts.length === 0 ? (
+        <div className="text-center py-20">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 rounded-2xl mb-5">
+            <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <p className="text-slate-500 text-lg mb-2">下書きがありません</p>
+          <p className="text-slate-400 text-sm mb-6">新規作成で手順書を作り始めましょう</p>
+          <Link
+            href="/instructions/new"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl font-medium hover:from-blue-600 hover:to-indigo-600 transition shadow-md"
+          >
+            新規作成
+          </Link>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {drafts.map((inst) => (
+            <div
+              key={inst.id}
+              className="bg-white rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all duration-200 overflow-hidden"
+            >
+              <div className="flex items-center gap-4 p-5">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="font-semibold text-slate-800 truncate">{inst.title || '無題の手順書'}</h2>
+                    <span
+                      className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${
+                        inst.category === 'pc_work'
+                          ? 'bg-blue-50 text-blue-600'
+                          : 'bg-orange-50 text-orange-600'
+                      }`}
+                    >
+                      {CATEGORY_LABELS[inst.category]}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-slate-400">
+                    <span>{inst.steps.length} ステップ</span>
+                    <span>最終更新: {new Date(inst.updatedAt).toLocaleString('ja-JP')}</span>
+                    {inst.createdBy && <span>作成者: {inst.createdBy}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Link
+                    href={`/instructions/edit?id=${inst.id}`}
+                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg text-sm font-medium hover:from-blue-600 hover:to-indigo-600 transition shadow-sm"
+                  >
+                    編集を再開
+                  </Link>
+                  <button
+                    onClick={() => handleDelete(inst.id, inst.title)}
+                    className="px-3 py-2 text-sm text-slate-400 hover:text-red-600 transition"
+                  >
+                    削除
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

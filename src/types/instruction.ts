@@ -31,6 +31,8 @@ export interface UpdateHistoryEntry {
   note?: string;
 }
 
+export type InstructionStatus = 'draft' | 'completed';
+
 export interface WorkInstruction {
   id: string;
   title: string;
@@ -42,6 +44,7 @@ export interface WorkInstruction {
   createdBy?: string;
   updatedBy?: string;
   updateHistory?: UpdateHistoryEntry[];
+  status?: InstructionStatus;
 }
 
 export const CATEGORY_LABELS: Record<Category, string> = {
