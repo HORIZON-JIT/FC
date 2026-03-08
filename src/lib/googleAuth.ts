@@ -1,6 +1,9 @@
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 const SCOPES = 'https://www.googleapis.com/auth/drive';
-const SIGNED_IN_KEY = 'google_signed_in';
+
+const STORAGE_TOKEN_KEY = 'google_auth_token';
+const STORAGE_EXPIRY_KEY = 'google_auth_expiry';
+const STORAGE_USER_KEY = 'google_auth_user';
 
 export interface GoogleAuthState {
   isInitialized: boolean;
@@ -73,6 +76,55 @@ async function fetchUserInfo(accessToken: string) {
   }
 }
 
+/** Save token + user info to localStorage for session persistence */
+function saveSession(accessToken: string, expiresIn: number) {
+  const expiryTime = Date.now() + expiresIn * 1000;
+  localStorage.setItem(STORAGE_TOKEN_KEY, accessToken);
+  localStorage.setItem(STORAGE_EXPIRY_KEY, String(expiryTime));
+  const user = {
+    name: authState.userName,
+    email: authState.userEmail,
+    photo: authState.userPhoto,
+  };
+  localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(user));
+}
+
+/** Clear saved session from localStorage */
+function clearSession() {
+  localStorage.removeItem(STORAGE_TOKEN_KEY);
+  localStorage.removeItem(STORAGE_EXPIRY_KEY);
+  localStorage.removeItem(STORAGE_USER_KEY);
+}
+
+/** Try to restore a saved session from localStorage. Returns true if successful. */
+function tryRestoreSession(): boolean {
+  const token = localStorage.getItem(STORAGE_TOKEN_KEY);
+  const expiryStr = localStorage.getItem(STORAGE_EXPIRY_KEY);
+  if (!token || !expiryStr) return false;
+
+  const expiry = Number(expiryStr);
+  // Require at least 2 minutes remaining to avoid using nearly-expired tokens
+  if (Date.now() > expiry - 120_000) {
+    clearSession();
+    return false;
+  }
+
+  authState.isSignedIn = true;
+  authState.accessToken = token;
+
+  // Restore cached user info immediately (will be refreshed in background)
+  try {
+    const user = JSON.parse(localStorage.getItem(STORAGE_USER_KEY) || '{}');
+    authState.userName = user.name || null;
+    authState.userEmail = user.email || null;
+    authState.userPhoto = user.photo || null;
+  } catch {
+    // ignore parse errors
+  }
+
+  return true;
+}
+
 export async function initGoogleAuth(): Promise<void> {
   if (!isGoogleConfigured()) return;
   if (authState.isInitialized) return;
@@ -93,29 +145,32 @@ export async function initGoogleAuth(): Promise<void> {
       if (response.error) {
         authState.isSignedIn = false;
         authState.accessToken = null;
+        clearSession();
         notifyListeners();
         return;
       }
       authState.isSignedIn = true;
       authState.accessToken = response.access_token;
       gapi.client.setToken({ access_token: response.access_token });
-      localStorage.setItem(SIGNED_IN_KEY, '1');
       await fetchUserInfo(response.access_token);
+      saveSession(response.access_token, response.expires_in ?? 3600);
       notifyListeners();
     },
     error_callback: () => {
-      // User closed popup or silent restore failed — clear flag
-      localStorage.removeItem(SIGNED_IN_KEY);
+      // User closed popup, do nothing
     },
   });
 
+  // Restore session from localStorage if token is still valid
+  const restored = tryRestoreSession();
+  if (restored) {
+    gapi.client.setToken({ access_token: authState.accessToken! });
+    // Refresh user info in background
+    fetchUserInfo(authState.accessToken!).then(() => notifyListeners());
+  }
+
   authState.isInitialized = true;
   notifyListeners();
-
-  // Silently restore session if user was previously signed in
-  if (localStorage.getItem(SIGNED_IN_KEY) === '1') {
-    tokenClient.requestAccessToken({ prompt: '' });
-  }
 }
 
 export function signIn(): void {
@@ -134,6 +189,6 @@ export function signOut(): void {
   authState.userName = null;
   authState.userEmail = null;
   authState.userPhoto = null;
-  localStorage.removeItem(SIGNED_IN_KEY);
+  clearSession();
   notifyListeners();
 }
