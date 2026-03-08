@@ -13,10 +13,24 @@ function EditInstructionContent() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const id = searchParams.get('id');
-    if (id) {
-      const data = getInstruction(id);
-      setInstruction(data || null);
+    const source = searchParams.get('source');
+    if (source === 'drive') {
+      // Driveから読み込んだデータをsessionStorageから取得
+      const raw = sessionStorage.getItem('drive_import_instruction');
+      if (raw) {
+        sessionStorage.removeItem('drive_import_instruction');
+        try {
+          setInstruction(JSON.parse(raw) as WorkInstruction);
+        } catch {
+          setInstruction(null);
+        }
+      }
+    } else {
+      const id = searchParams.get('id');
+      if (id) {
+        const data = getInstruction(id);
+        setInstruction(data || null);
+      }
     }
     setLoading(false);
   }, [searchParams]);

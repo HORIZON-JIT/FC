@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { WorkInstruction } from '@/types/instruction';
-import { saveInstruction } from '@/lib/storage';
 import { isGoogleConfigured, getAuthState } from '@/lib/googleAuth';
 import DriveJsonFilePicker from '@/components/DriveJsonFilePicker';
 
@@ -36,8 +35,9 @@ export default function HomePage() {
       }
       const instruction = json as WorkInstruction;
       instruction.status = 'completed';
-      saveInstruction(instruction);
-      router.push(`/instructions/edit?id=${instruction.id}`);
+      // sessionStorageに一時保管（localStorageを圧迫しない）
+      sessionStorage.setItem('drive_import_instruction', JSON.stringify(instruction));
+      router.push('/instructions/edit?source=drive');
     } catch (err) {
       setImportError(
         err instanceof Error ? err.message : `${fileName}の読み込みに失敗しました。`
