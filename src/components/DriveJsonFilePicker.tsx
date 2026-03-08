@@ -1,8 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { DriveFolder, DriveFileInfo, getTargetFolder, listJsonFilesInFolder, downloadDriveFile } from '@/lib/googleDrive';
-import DriveFolderPicker from './DriveFolderPicker';
+import { useState, useEffect } from 'react';
+import { DriveFileInfo, getTargetFolder, listJsonFilesInFolder, downloadDriveFile } from '@/lib/googleDrive';
 
 interface DriveJsonFilePickerProps {
   open: boolean;
@@ -11,36 +10,37 @@ interface DriveJsonFilePickerProps {
 }
 
 export default function DriveJsonFilePicker({ open, onClose, onFileLoaded }: DriveJsonFilePickerProps) {
-  const [showFolderPicker, setShowFolderPicker] = useState(true);
-  const [selectedFolder, setSelectedFolder] = useState<DriveFolder | null>(null);
   const [files, setFiles] = useState<DriveFileInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [folderName, setFolderName] = useState<string>('');
 
-  const handleFolderSelected = async (folder: DriveFolder | null) => {
-    setShowFolderPicker(false);
-    const targetFolder = folder || getTargetFolder();
-    if (!targetFolder) {
-      setError('フォルダが選択されていません');
+  useEffect(() => {
+    if (!open) return;
+    const folder = getTargetFolder();
+    if (!folder) {
+      setError('Driveフォルダが指定されていません。ヘッダーのフォルダボタンから設定してください。');
+      setFolderName('');
+      setFiles([]);
       return;
     }
-    setSelectedFolder(targetFolder);
-    setLoading(true);
+    setFolderName(folder.name);
     setError(null);
-    try {
-      const jsonFiles = await listJsonFilesInFolder(targetFolder.id);
-      setFiles(jsonFiles);
-      if (jsonFiles.length === 0) {
-        setError('このフォルダにJSONファイルがありません');
-      }
-    } catch (err) {
-      console.error('Failed to list files:', err);
-      setError('ファイル一覧の取得に失敗しました');
-    } finally {
-      setLoading(false);
-    }
-  };
+    setLoading(true);
+    listJsonFilesInFolder(folder.id)
+      .then((jsonFiles) => {
+        setFiles(jsonFiles);
+        if (jsonFiles.length === 0) {
+          setError('このフォルダにJSONファイルがありません');
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to list files:', err);
+        setError('ファイル一覧の取得に失敗しました');
+      })
+      .finally(() => setLoading(false));
+  }, [open]);
 
   const handleFileSelect = async (file: DriveFileInfo) => {
     setDownloading(file.id);
@@ -58,44 +58,23 @@ export default function DriveJsonFilePicker({ open, onClose, onFileLoaded }: Dri
   };
 
   const handleClose = () => {
-    setShowFolderPicker(true);
-    setSelectedFolder(null);
     setFiles([]);
     setError(null);
     setDownloading(null);
     onClose();
   };
 
-  const handleBackToFolderPicker = () => {
-    setShowFolderPicker(true);
-    setSelectedFolder(null);
-    setFiles([]);
-    setError(null);
-  };
-
   if (!open) return null;
 
-  // Step 1: Folder selection
-  if (showFolderPicker) {
-    return (
-      <DriveFolderPicker
-        open={true}
-        onClose={handleClose}
-        onSelect={handleFolderSelected}
-      />
-    );
-  }
-
-  // Step 2: JSON file selection
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-2 sm:p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="px-4 py-3 border-b border-gray-200">
           <h3 className="text-lg font-bold text-gray-800">JSONファイルを選択</h3>
-          {selectedFolder && (
+          {folderName && (
             <p className="text-xs text-gray-500 mt-1">
-              フォルダ: <span className="font-medium text-emerald-700">{selectedFolder.name}</span>
+              フォルダ: <span className="font-medium text-emerald-700">{folderName}</span>
             </p>
           )}
         </div>
@@ -106,7 +85,7 @@ export default function DriveJsonFilePicker({ open, onClose, onFileLoaded }: Dri
             <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
               読み込み中...
             </div>
-          ) : files.length === 0 ? (
+          ) : files.length === 0 && !error ? (
             <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
               JSONファイルがありません
             </div>
@@ -142,16 +121,7 @@ export default function DriveJsonFilePicker({ open, onClose, onFileLoaded }: Dri
         )}
 
         {/* Actions */}
-        <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-          <button
-            onClick={handleBackToFolderPicker}
-            className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            フォルダ選択に戻る
-          </button>
+        <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end">
           <button
             onClick={handleClose}
             className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition"
