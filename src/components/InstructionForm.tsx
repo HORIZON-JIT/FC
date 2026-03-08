@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import { WorkInstruction, Step, Category, CATEGORY_LABELS, UpdateHistoryEntry, InstructionStatus } from '@/types/instruction';
+import { WorkInstruction, Step, DEFAULT_CATEGORIES, UpdateHistoryEntry, InstructionStatus } from '@/types/instruction';
 import { saveInstruction } from '@/lib/storage';
 import { buildExcelBuffer } from '@/lib/exportSpreadsheet';
 import { saveFileToDrive, getTargetFolder } from '@/lib/googleDrive';
@@ -54,7 +54,15 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
   const isEdit = !!initialData;
 
   const [title, setTitle] = useState(initialData?.title || '');
-  const [category, setCategory] = useState<Category>(initialData?.category || 'pc_work');
+  const [category, setCategory] = useState(initialData?.category || DEFAULT_CATEGORIES[0]);
+  const [showCustomCategory, setShowCustomCategory] = useState(
+    !!initialData?.category && !DEFAULT_CATEGORIES.includes(initialData.category as typeof DEFAULT_CATEGORIES[number])
+  );
+  const [customCategory, setCustomCategory] = useState(
+    initialData?.category && !DEFAULT_CATEGORIES.includes(initialData.category as typeof DEFAULT_CATEGORIES[number])
+      ? initialData.category
+      : ''
+  );
   const [description, setDescription] = useState(initialData?.description || '');
   const [steps, setSteps] = useState<Step[]>(
     initialData?.steps?.length ? initialData.steps : [createEmptyStep(0)]
@@ -251,17 +259,53 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
           <label className="block text-sm font-medium text-gray-700 mb-1">
             カテゴリ <span className="text-red-500">*</span>
           </label>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value as Category)}
-            className="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
-          >
-            {(Object.entries(CATEGORY_LABELS) as [Category, string][]).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+          {showCustomCategory ? (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={customCategory}
+                onChange={(e) => {
+                  setCustomCategory(e.target.value);
+                  setCategory(e.target.value);
+                }}
+                className="flex-1 border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                placeholder="カテゴリ名を入力"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCustomCategory(false);
+                  setCustomCategory('');
+                  setCategory(DEFAULT_CATEGORIES[0]);
+                }}
+                className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded transition"
+              >
+                戻す
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="flex-1 border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
+              >
+                {DEFAULT_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setShowCustomCategory(true)}
+                className="px-3 py-2 text-sm text-blue-600 hover:text-blue-800 border border-blue-300 hover:border-blue-400 rounded transition whitespace-nowrap"
+              >
+                + 新規
+              </button>
+            </div>
+          )}
         </div>
 
         <div>

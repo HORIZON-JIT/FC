@@ -23,7 +23,9 @@ export function getImageCaption(step: Step, index: number): string {
   return step.imageCaptions?.[index] ?? '';
 }
 
-export type Category = 'pc_work' | 'packing';
+export type Category = string;
+
+export const DEFAULT_CATEGORIES = ['事務作業', '現場作業'] as const;
 
 export interface UpdateHistoryEntry {
   updatedBy: string;
@@ -47,7 +49,14 @@ export interface WorkInstruction {
   status?: InstructionStatus;
 }
 
-export const CATEGORY_LABELS: Record<Category, string> = {
+export const CATEGORY_LABELS: Record<string, string> = {
   pc_work: 'PC事務作業',
   packing: '梱包作業',
+  事務作業: '事務作業',
+  現場作業: '現場作業',
 };
+
+/** Get display label for a category (falls back to the raw value for custom categories) */
+export function getCategoryLabel(category: string): string {
+  return CATEGORY_LABELS[category] || category;
+}
