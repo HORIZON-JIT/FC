@@ -1,5 +1,6 @@
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 const SCOPES = 'https://www.googleapis.com/auth/drive';
+const SIGNED_IN_KEY = 'google_signed_in';
 
 export interface GoogleAuthState {
   isInitialized: boolean;
@@ -98,21 +99,28 @@ export async function initGoogleAuth(): Promise<void> {
       authState.isSignedIn = true;
       authState.accessToken = response.access_token;
       gapi.client.setToken({ access_token: response.access_token });
+      localStorage.setItem(SIGNED_IN_KEY, '1');
       await fetchUserInfo(response.access_token);
       notifyListeners();
     },
     error_callback: () => {
-      // User closed popup, do nothing
+      // User closed popup or silent restore failed — clear flag
+      localStorage.removeItem(SIGNED_IN_KEY);
     },
   });
 
   authState.isInitialized = true;
   notifyListeners();
+
+  // Silently restore session if user was previously signed in
+  if (localStorage.getItem(SIGNED_IN_KEY) === '1') {
+    tokenClient.requestAccessToken({ prompt: '' });
+  }
 }
 
 export function signIn(): void {
   if (!tokenClient) return;
-  tokenClient.requestAccessToken({ prompt: 'consent' });
+  tokenClient.requestAccessToken({ prompt: 'select_account' });
 }
 
 export function signOut(): void {
@@ -126,5 +134,6 @@ export function signOut(): void {
   authState.userName = null;
   authState.userEmail = null;
   authState.userPhoto = null;
+  localStorage.removeItem(SIGNED_IN_KEY);
   notifyListeners();
 }
