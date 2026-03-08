@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { WorkInstruction, CATEGORY_LABELS, getStepImages, getImageCaption } from '@/types/instruction';
+import { WorkInstruction, getCategoryLabel, getStepImages, getImageCaption } from '@/types/instruction';
 import { getInstruction, deleteInstruction, importInstruction } from '@/lib/storage';
 import { exportToPdf, buildPdfBuffer } from '@/lib/exportPdf';
 import { exportToExcel, buildExcelBuffer } from '@/lib/exportSpreadsheet';
@@ -279,7 +279,7 @@ function InstructionViewContent() {
                 : 'bg-orange-50 text-orange-600'
             }`}
           >
-            {CATEGORY_LABELS[instruction.category]}
+            {getCategoryLabel(instruction.category)}
           </span>
         </div>
         {instruction.description && (

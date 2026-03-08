@@ -1,5 +1,5 @@
 import type jsPDF from 'jspdf';
-import { WorkInstruction, CATEGORY_LABELS, getStepImages, getImageCaption } from '@/types/instruction';
+import { WorkInstruction, getCategoryLabel, getStepImages, getImageCaption } from '@/types/instruction';
 
 export async function exportToPdf(instruction: WorkInstruction): Promise<void> {
   try {
@@ -87,7 +87,7 @@ function buildHtmlElement(instruction: WorkInstruction): HTMLDivElement {
     fontSize: '11px',
     fontWeight: '600',
   }, metaBar);
-  badge.textContent = CATEGORY_LABELS[instruction.category];
+  badge.textContent = getCategoryLabel(instruction.category);
 
   const dateInfo = createEl('span', {
     color: '#9CA3AF',

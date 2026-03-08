@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { WorkInstruction, CATEGORY_LABELS, getStepImages, getImageCaption } from '@/types/instruction';
+import { WorkInstruction, getCategoryLabel, getStepImages, getImageCaption } from '@/types/instruction';
 
 /** Estimate row height for text in merged content columns */
 function calcRowHeight(text: string, charsPerLine: number, lineHeight: number, minHeight: number): number {
@@ -223,7 +223,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
 
   ws.getRow(row).height = 26;
   // Category (left)
-  mergeStyled(ws, row, 1, row, 5, `  ${CATEGORY_LABELS[instruction.category]}`, {
+  mergeStyled(ws, row, 1, row, 5, `  ${getCategoryLabel(instruction.category)}`, {
     font: { size: 10, bold: true, color: { argb: catC.text } },
     fill: solidFill(catC.bg),
     alignment: { horizontal: 'left' },
@@ -626,7 +626,7 @@ export async function buildAllExcelBuffer(instructions: WorkInstruction[]): Prom
     const values: (string | number | undefined)[] = [
       i + 1,
       inst.title,
-      CATEGORY_LABELS[inst.category],
+      getCategoryLabel(inst.category),
       inst.description,
       inst.steps.length,
       new Date(inst.createdAt).toLocaleDateString('ja-JP'),

@@ -15,7 +15,7 @@ import {
   ExternalHyperlink,
 } from 'docx';
 import { saveAs } from 'file-saver';
-import { WorkInstruction, CATEGORY_LABELS, getStepImages, getImageCaption } from '@/types/instruction';
+import { WorkInstruction, getCategoryLabel, getStepImages, getImageCaption } from '@/types/instruction';
 
 function parseDataUrl(dataUrl: string): { buffer: Uint8Array; extension: 'png' | 'jpg' } {
   const match = dataUrl.match(/^data:image\/(png|jpe?g|gif|webp);base64,(.+)$/);
@@ -137,7 +137,7 @@ export async function exportToWord(instruction: WorkInstruction): Promise<void> 
       shading: { type: ShadingType.SOLID, color: COLORS.grayLight },
       children: [
         new TextRun({
-          text: `カテゴリ：${CATEGORY_LABELS[instruction.category]}`,
+          text: `カテゴリ：${getCategoryLabel(instruction.category)}`,
           size: 20,
           color: COLORS.dark,
           font: 'Arial',

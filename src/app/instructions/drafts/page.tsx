@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { WorkInstruction, CATEGORY_LABELS } from '@/types/instruction';
+import { WorkInstruction, getCategoryLabel } from '@/types/instruction';
 import { getAllInstructions, deleteInstruction } from '@/lib/storage';
 
 export default function DraftsPage() {
@@ -70,7 +70,7 @@ export default function DraftsPage() {
                           : 'bg-orange-50 text-orange-600'
                       }`}
                     >
-                      {CATEGORY_LABELS[inst.category]}
+                      {getCategoryLabel(inst.category)}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-slate-400">
