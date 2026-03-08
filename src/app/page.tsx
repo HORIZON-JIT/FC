@@ -87,7 +87,7 @@ export default function HomePage() {
             </svg>
           </div>
           <h2 className="text-lg font-bold text-slate-800 mb-2">途中から編集</h2>
-          <p className="text-sm text-slate-500">一時保存した下書きを編集します</p>
+          <p className="text-sm text-slate-500">下書きの編集を再開</p>
         </Link>
 
         {/* 手順書更新 */}
@@ -102,7 +102,7 @@ export default function HomePage() {
             </svg>
           </div>
           <h2 className="text-lg font-bold text-slate-800 mb-2">手順書更新</h2>
-          <p className="text-sm text-slate-500">JSONファイルを読み込んで更新します</p>
+          <p className="text-sm text-slate-500">JSONを読み込んで更新</p>
         </button>
         <input
           ref={fileInputRef}
