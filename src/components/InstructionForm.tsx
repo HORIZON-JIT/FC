@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import { WorkInstruction, Step, Category, CATEGORY_LABELS, UpdateHistoryEntry } from '@/types/instruction';
+import { WorkInstruction, Step, Category, CATEGORY_LABELS, UpdateHistoryEntry, InstructionStatus } from '@/types/instruction';
 import { saveInstruction } from '@/lib/storage';
 import StepEditor from './StepEditor';
 
@@ -31,6 +31,19 @@ function saveLastAuthorName(name: string) {
   if (typeof window !== 'undefined') {
     localStorage.setItem(LAST_AUTHOR_KEY, name);
   }
+}
+
+function downloadJson(instruction: WorkInstruction) {
+  const json = JSON.stringify(instruction, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${instruction.title || '手順書'}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export default function InstructionForm({ initialData }: InstructionFormProps) {
@@ -77,29 +90,33 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
     setSteps(newSteps.map((s, i) => ({ ...s, orderIndex: i })));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const buildInstruction = (status: InstructionStatus): WorkInstruction | null => {
     if (!title.trim()) {
       alert('タイトルを入力してください。');
-      return;
+      return null;
     }
-    if (steps.some((s) => !s.title.trim())) {
-      alert('すべてのステップにタイトルを入力してください。');
-      return;
-    }
-    if (!authorName.trim()) {
-      alert(isEdit ? '更新者名を入力してください。' : '作成者名を入力してください。');
-      return;
+
+    // For completion, validate all steps and author
+    if (status === 'completed') {
+      if (steps.some((s) => !s.title.trim())) {
+        alert('すべてのステップにタイトルを入力してください。');
+        return null;
+      }
+      if (!authorName.trim()) {
+        alert(isEdit ? '更新者名を入力してください。' : '作成者名を入力してください。');
+        return null;
+      }
     }
 
     const trimmedName = authorName.trim();
-    saveLastAuthorName(trimmedName);
+    if (trimmedName) {
+      saveLastAuthorName(trimmedName);
+    }
 
     const now = new Date().toISOString();
 
     let updateHistory: UpdateHistoryEntry[] = initialData?.updateHistory || [];
-    if (isEdit) {
+    if (isEdit && trimmedName) {
       const entry: UpdateHistoryEntry = {
         updatedBy: trimmedName,
         updatedAt: now,
@@ -110,7 +127,7 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
       updateHistory = [...updateHistory, entry];
     }
 
-    const instruction: WorkInstruction = {
+    return {
       id: initialData?.id || uuidv4(),
       title: title.trim(),
       category,
@@ -118,10 +135,16 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
       steps,
       createdAt: initialData?.createdAt || now,
       updatedAt: now,
-      createdBy: initialData?.createdBy || trimmedName,
-      updatedBy: isEdit ? trimmedName : undefined,
+      createdBy: initialData?.createdBy || trimmedName || undefined,
+      updatedBy: isEdit && trimmedName ? trimmedName : initialData?.updatedBy,
       updateHistory: updateHistory.length > 0 ? updateHistory : undefined,
+      status,
     };
+  };
+
+  const handleSave = (status: InstructionStatus) => {
+    const instruction = buildInstruction(status);
+    if (!instruction) return;
 
     try {
       saveInstruction(instruction);
@@ -129,7 +152,19 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
       alert(e instanceof Error ? e.message : '保存に失敗しました。');
       return;
     }
-    router.push(`/instructions/view?id=${instruction.id}`);
+
+    if (status === 'completed') {
+      downloadJson(instruction);
+      router.push(`/instructions/view?id=${instruction.id}`);
+    } else {
+      router.push('/instructions/drafts');
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Default submit = complete
+    handleSave('completed');
   };
 
   return (
@@ -180,7 +215,6 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
             onChange={(e) => setAuthorName(e.target.value)}
             className="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             placeholder={isEdit ? '更新者の名前を入力' : '作成者の名前を入力'}
-            required
           />
         </div>
 
@@ -239,19 +273,29 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
       {/* Actions */}
       <div className="flex flex-col sm:flex-row gap-3 pt-4">
         <button
-          type="submit"
-          className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition shadow-sm"
+          type="button"
+          onClick={() => handleSave('draft')}
+          className="flex-1 py-3 bg-amber-50 border border-amber-300 text-amber-700 rounded-lg font-medium hover:bg-amber-100 transition"
         >
-          {isEdit ? '更新する' : '保存する'}
+          一時保存（下書き）
+        </button>
+        <button
+          type="submit"
+          className="flex-1 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg font-medium hover:from-blue-600 hover:to-indigo-600 transition shadow-sm"
+        >
+          {isEdit ? '更新して完成' : '完成として保存'}
         </button>
         <button
           type="button"
           onClick={() => router.back()}
-          className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition"
+          className="sm:w-auto px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition"
         >
           キャンセル
         </button>
       </div>
+      <p className="text-xs text-slate-400 text-center">
+        「完成として保存」するとJSONファイルが自動ダウンロードされます（次回更新用）
+      </p>
     </form>
   );
 }
