@@ -83,7 +83,12 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
       updatedAt: now,
     };
 
-    saveInstruction(instruction);
+    try {
+      saveInstruction(instruction);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '保存に失敗しました。');
+      return;
+    }
     router.push(`/instructions/view?id=${instruction.id}`);
   };
 

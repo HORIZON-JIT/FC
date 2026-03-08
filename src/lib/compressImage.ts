@@ -1,9 +1,11 @@
-const MAX_DIMENSION = 1920;
-const JPEG_QUALITY = 0.75;
+const MAX_DIMENSION = 1280;
+const JPEG_QUALITY = 0.65;
+const TARGET_SIZE = 150_000; // target ~150KB per image for localStorage friendliness
 
 /**
  * Compress an image file using Canvas API.
  * Resizes to fit within MAX_DIMENSION on longest side and converts to JPEG.
+ * If the result exceeds TARGET_SIZE, re-compresses at lower quality.
  */
 export function compressImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -33,7 +35,18 @@ export function compressImage(file: File): Promise<string> {
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
 
-        resolve(canvas.toDataURL('image/jpeg', JPEG_QUALITY));
+        // First pass at default quality
+        let dataUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+
+        // If still too large, progressively lower quality
+        let quality = JPEG_QUALITY;
+        while (dataUrl.length > TARGET_SIZE * 1.37 && quality > 0.3) {
+          // 1.37 accounts for Base64 overhead (~37%)
+          quality -= 0.1;
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+        }
+
+        resolve(dataUrl);
       };
       img.src = reader.result as string;
     };
