@@ -2,6 +2,7 @@
 
 import { Step, getStepImages } from '@/types/instruction';
 import { useRef, useCallback, useEffect } from 'react';
+import { compressImage } from '@/lib/compressImage';
 
 interface StepEditorProps {
   step: Step;
@@ -66,15 +67,13 @@ export default function StepEditor({
   }, [onChange, step]);
 
   const processImageFile = useCallback((file: File) => {
-    if (file.size > 5 * 1024 * 1024) {
-      alert('画像サイズは5MB以下にしてください。');
+    if (file.size > 20 * 1024 * 1024) {
+      alert('画像サイズは20MB以下にしてください。');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      addImage(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    compressImage(file)
+      .then((dataUrl) => addImage(dataUrl))
+      .catch(() => alert('画像の処理に失敗しました。'));
   }, [addImage]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
