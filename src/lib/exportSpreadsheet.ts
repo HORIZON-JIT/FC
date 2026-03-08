@@ -164,9 +164,6 @@ export async function exportToExcel(instruction: WorkInstruction): Promise<void>
   downloadBuffer(buffer, `${instruction.title}_手順書.xlsx`);
 }
 
-// Excel column width unit ≈ 7.5 pixels
-const COL_WIDTH_PX = 7.5;
-
 export async function buildExcelBuffer(instruction: WorkInstruction): Promise<ArrayBuffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('作業手順書', {
@@ -195,8 +192,6 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
 
   const LAST_COL = 14; // N
   const CONTENT_START_COL = 3; // C
-  // Approximate pixel width of content area (C-N = 12 cols × 10 width × 7.5 px)
-  const CONTENT_WIDTH_PX = (LAST_COL - CONTENT_START_COL + 1) * contentColWidth * COL_WIDTH_PX;
   let row = 1;
 
   // ===== TITLE BANNER =====
@@ -363,14 +358,24 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
     const stepImages = getStepImages(step);
     for (let imgIdx = 0; imgIdx < stepImages.length; imgIdx++) {
       const IMAGE_ROW_HEIGHT = 18;
-      const MIN_IMAGE_ROWS = 6;
-      const MAX_IMAGE_ROWS = 28;
+      const MAX_IMG_WIDTH = 700;
+      const MAX_IMG_HEIGHT = 500;
 
-      // Calculate row count dynamically based on image aspect ratio
+      // Get actual image dimensions and scale to fit
       const dims = await getImageDimensions(stepImages[imgIdx]);
-      const aspectRatio = dims.height / dims.width;
-      const fitHeightPx = CONTENT_WIDTH_PX * aspectRatio;
-      const imageRows = Math.min(MAX_IMAGE_ROWS, Math.max(MIN_IMAGE_ROWS, Math.round(fitHeightPx / IMAGE_ROW_HEIGHT)));
+      let imgW = dims.width;
+      let imgH = dims.height;
+      if (imgW > MAX_IMG_WIDTH) {
+        imgH = Math.round(imgH * (MAX_IMG_WIDTH / imgW));
+        imgW = MAX_IMG_WIDTH;
+      }
+      if (imgH > MAX_IMG_HEIGHT) {
+        imgW = Math.round(imgW * (MAX_IMG_HEIGHT / imgH));
+        imgH = MAX_IMG_HEIGHT;
+      }
+
+      // Row count based on actual pixel height
+      const imageRows = Math.max(4, Math.ceil((imgH + 10) / IMAGE_ROW_HEIGHT));
 
       const imageStartRow = row;
 
@@ -404,45 +409,13 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
         }
       }
 
-      // Place image with correct aspect ratio
-      // Calculate the actual image area in column/row units
-      const areaWidthCols = LAST_COL - CONTENT_START_COL + 1; // 12 columns
-      const areaHeightRows = imageRows;
-      const areaWidthPx = areaWidthCols * contentColWidth * COL_WIDTH_PX;
-      const areaHeightPx = areaHeightRows * IMAGE_ROW_HEIGHT;
-      const areaAspect = areaHeightPx / areaWidthPx;
-
-      // Margins in column/row fraction units
-      const MARGIN_COL = 0.15;
-      const MARGIN_ROW = 0.3;
-
-      let imgColSpan: number;
-      let imgRowSpan: number;
-
-      if (aspectRatio > areaAspect) {
-        // Image is taller than area — fit to height, shrink width
-        imgRowSpan = areaHeightRows - MARGIN_ROW * 2;
-        const imgHeightPx = imgRowSpan * IMAGE_ROW_HEIGHT;
-        const imgWidthPx = imgHeightPx / aspectRatio;
-        imgColSpan = imgWidthPx / (contentColWidth * COL_WIDTH_PX);
-      } else {
-        // Image is wider than area — fit to width, shrink height
-        imgColSpan = areaWidthCols - MARGIN_COL * 2;
-        const imgWidthPx = imgColSpan * contentColWidth * COL_WIDTH_PX;
-        const imgHeightPx = imgWidthPx * aspectRatio;
-        imgRowSpan = imgHeightPx / IMAGE_ROW_HEIGHT;
-      }
-
-      // Center the image in the area
-      const colOffset = (areaWidthCols - imgColSpan) / 2;
-      const rowOffset = (areaHeightRows - imgRowSpan) / 2;
-
+      // Place image with tl + ext (pixel size) to guarantee correct aspect ratio
       const { base64, extension } = parseDataUrl(stepImages[imgIdx]);
       const imageId = wb.addImage({ base64, extension });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ws.addImage(imageId, {
-        tl: { col: (CONTENT_START_COL - 1) + colOffset, row: imageStartRow - 1 + rowOffset },
-        br: { col: (CONTENT_START_COL - 1) + colOffset + imgColSpan, row: imageStartRow - 1 + rowOffset + imgRowSpan },
+        tl: { col: CONTENT_START_COL - 1 + 0.2, row: imageStartRow - 1 + 0.3 },
+        ext: { width: imgW, height: imgH },
       } as any);
 
       row = imageStartRow + imageRows;
