@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import { WorkInstruction, CATEGORY_LABELS, getStepImages, getImageCaption } from '@/types/instruction';
 
-/** Estimate row height for text in merged C-G columns (approx 40 chars/line for Japanese) */
+/** Estimate row height for text in merged content columns */
 function calcRowHeight(text: string, charsPerLine: number, lineHeight: number, minHeight: number): number {
   const lines = text.split('\n');
   let totalLines = 0;
@@ -54,7 +54,7 @@ function getImageDimensions(dataUrl: string): Promise<{ width: number; height: n
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    img.onerror = () => resolve({ width: 4, height: 3 }); // fallback to 4:3
+    img.onerror = () => resolve({ width: 16, height: 9 }); // fallback to 16:9
     img.src = dataUrl;
   });
 }
@@ -164,25 +164,39 @@ export async function exportToExcel(instruction: WorkInstruction): Promise<void>
   downloadBuffer(buffer, `${instruction.title}_手順書.xlsx`);
 }
 
+// Excel column width unit ≈ 7.5 pixels
+const COL_WIDTH_PX = 7.5;
+
 export async function buildExcelBuffer(instruction: WorkInstruction): Promise<ArrayBuffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('作業手順書', {
-    pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1 },
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1 },
     properties: { showGridLines: false },
   });
 
-  // Columns: A(accent 1.5) B(number 5) C(16) D(16) E(16) F(16) G(12)
+  // Columns: A(accent 1.5) B(label 6) C-N(content, 12 cols × 10 width)
+  const contentColWidth = 10;
   ws.columns = [
     { width: 1.5 },  // A: accent stripe
     { width: 6 },    // B: step number / label
-    { width: 16 },   // C: content
-    { width: 16 },   // D: content
-    { width: 16 },   // E: content
-    { width: 16 },   // F: content
-    { width: 12 },   // G: dates/info
+    { width: contentColWidth },   // C
+    { width: contentColWidth },   // D
+    { width: contentColWidth },   // E
+    { width: contentColWidth },   // F
+    { width: contentColWidth },   // G
+    { width: contentColWidth },   // H
+    { width: contentColWidth },   // I
+    { width: contentColWidth },   // J
+    { width: contentColWidth },   // K
+    { width: contentColWidth },   // L
+    { width: contentColWidth },   // M
+    { width: contentColWidth },   // N
   ];
 
-  const LAST_COL = 7;
+  const LAST_COL = 14; // N
+  const CONTENT_START_COL = 3; // C
+  // Approximate pixel width of content area (C-N = 12 cols × 10 width × 7.5 px)
+  const CONTENT_WIDTH_PX = (LAST_COL - CONTENT_START_COL + 1) * contentColWidth * COL_WIDTH_PX;
   let row = 1;
 
   // ===== TITLE BANNER =====
@@ -214,7 +228,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
 
   ws.getRow(row).height = 26;
   // Category (left)
-  mergeStyled(ws, row, 1, row, 3, `  ${CATEGORY_LABELS[instruction.category]}`, {
+  mergeStyled(ws, row, 1, row, 5, `  ${CATEGORY_LABELS[instruction.category]}`, {
     font: { size: 10, bold: true, color: { argb: catC.text } },
     fill: solidFill(catC.bg),
     alignment: { horizontal: 'left' },
@@ -223,7 +237,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
   // Dates (right)
   const created = new Date(instruction.createdAt).toLocaleDateString('ja-JP');
   const updated = new Date(instruction.updatedAt).toLocaleDateString('ja-JP');
-  mergeStyled(ws, row, 4, row, LAST_COL, `作成: ${created}  |  更新: ${updated}  `, {
+  mergeStyled(ws, row, 6, row, LAST_COL, `作成: ${created}  |  更新: ${updated}  `, {
     font: { size: 9, color: { argb: C.gray } },
     fill: solidFill(C.grayLight),
     alignment: { horizontal: 'right' },
@@ -233,7 +247,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
 
   // ===== DESCRIPTION =====
   if (instruction.description) {
-    ws.getRow(row).height = calcRowHeight(instruction.description, 35, 18, 28);
+    ws.getRow(row).height = calcRowHeight(instruction.description, 70, 18, 28);
     mergeStyled(ws, row, 1, row, LAST_COL, `  ${instruction.description}`, {
       font: { size: 10, color: { argb: C.text } },
       fill: solidFill(C.white),
@@ -269,8 +283,8 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
     numCell.alignment = { horizontal: 'center', vertical: 'middle' };
     setBoxBorder(numCell, { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER });
 
-    // C-G: step title
-    mergeStyled(ws, row, 3, row, LAST_COL, `  ${step.title}`, {
+    // C-N: step title
+    mergeStyled(ws, row, CONTENT_START_COL, row, LAST_COL, `  ${step.title}`, {
       font: { bold: true, size: 13, color: { argb: C.stepTitle } },
       fill: solidFill(C.headerBg),
       alignment: { horizontal: 'left' },
@@ -285,7 +299,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
 
     // --- Description ---
     if (step.description) {
-      ws.getRow(row).height = calcRowHeight(step.description, 30, 18, 32);
+      ws.getRow(row).height = calcRowHeight(step.description, 60, 18, 32);
 
       // A: accent
       const aCell = ws.getCell(row, 1);
@@ -300,8 +314,8 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
       labelCell.alignment = { horizontal: 'center', vertical: 'top' };
       setBoxBorder(labelCell, { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER });
 
-      // C-G: description content
-      mergeStyled(ws, row, 3, row, LAST_COL, step.description, {
+      // C-N: description content
+      mergeStyled(ws, row, CONTENT_START_COL, row, LAST_COL, step.description, {
         font: { size: 10, color: { argb: C.text } },
         fill: solidFill(C.white),
         border: { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER },
@@ -311,7 +325,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
 
     // --- Caution ---
     if (step.caution) {
-      ws.getRow(row).height = calcRowHeight(step.caution, 30, 18, 28);
+      ws.getRow(row).height = calcRowHeight(step.caution, 60, 18, 28);
 
       // A: amber accent
       const aCell = ws.getCell(row, 1);
@@ -331,8 +345,8 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
         right: { style: 'thin', color: { argb: C.cautionBorder } },
       });
 
-      // C-G: caution text
-      mergeStyled(ws, row, 3, row, LAST_COL, step.caution, {
+      // C-N: caution text
+      mergeStyled(ws, row, CONTENT_START_COL, row, LAST_COL, step.caution, {
         font: { size: 10, color: { argb: C.cautionText } },
         fill: solidFill(C.cautionBg),
         border: {
@@ -349,9 +363,8 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
     const stepImages = getStepImages(step);
     for (let imgIdx = 0; imgIdx < stepImages.length; imgIdx++) {
       const IMAGE_ROW_HEIGHT = 18;
-      const CONTENT_WIDTH_PX = 480; // approximate pixel width of columns C-G
       const MIN_IMAGE_ROWS = 6;
-      const MAX_IMAGE_ROWS = 22;
+      const MAX_IMAGE_ROWS = 28;
 
       // Calculate row count dynamically based on image aspect ratio
       const dims = await getImageDimensions(stepImages[imgIdx]);
@@ -380,23 +393,56 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
       labelCell.font = { name: 'Arial', size: 9, bold: true, color: { argb: C.gray } };
       labelCell.alignment = { horizontal: 'center', vertical: 'top' };
 
-      // Merge image region C-G only (not B)
-      ws.mergeCells(imageStartRow, 3, imageStartRow + imageRows - 1, LAST_COL);
-      const imgCell = ws.getCell(imageStartRow, 3);
+      // Merge image region C-N only (not B)
+      ws.mergeCells(imageStartRow, CONTENT_START_COL, imageStartRow + imageRows - 1, LAST_COL);
+      const imgCell = ws.getCell(imageStartRow, CONTENT_START_COL);
       imgCell.fill = solidFill(C.grayLight);
       imgCell.alignment = { vertical: 'middle', horizontal: 'center' };
       for (let r = imageStartRow; r < imageStartRow + imageRows; r++) {
-        for (let c = 3; c <= LAST_COL; c++) {
+        for (let c = CONTENT_START_COL; c <= LAST_COL; c++) {
           setBoxBorder(ws.getCell(r, c), { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER });
         }
       }
+
+      // Place image with correct aspect ratio
+      // Calculate the actual image area in column/row units
+      const areaWidthCols = LAST_COL - CONTENT_START_COL + 1; // 12 columns
+      const areaHeightRows = imageRows;
+      const areaWidthPx = areaWidthCols * contentColWidth * COL_WIDTH_PX;
+      const areaHeightPx = areaHeightRows * IMAGE_ROW_HEIGHT;
+      const areaAspect = areaHeightPx / areaWidthPx;
+
+      // Margins in column/row fraction units
+      const MARGIN_COL = 0.15;
+      const MARGIN_ROW = 0.3;
+
+      let imgColSpan: number;
+      let imgRowSpan: number;
+
+      if (aspectRatio > areaAspect) {
+        // Image is taller than area — fit to height, shrink width
+        imgRowSpan = areaHeightRows - MARGIN_ROW * 2;
+        const imgHeightPx = imgRowSpan * IMAGE_ROW_HEIGHT;
+        const imgWidthPx = imgHeightPx / aspectRatio;
+        imgColSpan = imgWidthPx / (contentColWidth * COL_WIDTH_PX);
+      } else {
+        // Image is wider than area — fit to width, shrink height
+        imgColSpan = areaWidthCols - MARGIN_COL * 2;
+        const imgWidthPx = imgColSpan * contentColWidth * COL_WIDTH_PX;
+        const imgHeightPx = imgWidthPx * aspectRatio;
+        imgRowSpan = imgHeightPx / IMAGE_ROW_HEIGHT;
+      }
+
+      // Center the image in the area
+      const colOffset = (areaWidthCols - imgColSpan) / 2;
+      const rowOffset = (areaHeightRows - imgRowSpan) / 2;
 
       const { base64, extension } = parseDataUrl(stepImages[imgIdx]);
       const imageId = wb.addImage({ base64, extension });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ws.addImage(imageId, {
-        tl: { col: 2.2, row: imageStartRow - 1 + 0.3 },
-        br: { col: LAST_COL - 0.3, row: imageStartRow - 1 + imageRows - 0.3 },
+        tl: { col: (CONTENT_START_COL - 1) + colOffset, row: imageStartRow - 1 + rowOffset },
+        br: { col: (CONTENT_START_COL - 1) + colOffset + imgColSpan, row: imageStartRow - 1 + rowOffset + imgRowSpan },
       } as any);
 
       row = imageStartRow + imageRows;
@@ -404,7 +450,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
       // Caption row
       const caption = getImageCaption(step, imgIdx);
       if (caption) {
-        ws.getRow(row).height = calcRowHeight(caption, 30, 16, 22);
+        ws.getRow(row).height = calcRowHeight(caption, 60, 16, 22);
 
         const aCap = ws.getCell(row, 1);
         aCap.fill = solidFill(C.accent);
@@ -414,7 +460,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
         bCap.fill = solidFill(C.grayLight);
         setBoxBorder(bCap, { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER });
 
-        mergeStyled(ws, row, 3, row, LAST_COL, caption, {
+        mergeStyled(ws, row, CONTENT_START_COL, row, LAST_COL, caption, {
           font: { size: 9, italic: true, color: { argb: C.gray } },
           fill: solidFill(C.grayLight),
           border: { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER },
@@ -440,13 +486,13 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
       labelCell.alignment = { horizontal: 'center', vertical: 'middle' };
       setBoxBorder(labelCell, { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER });
 
-      // C-G: url
-      mergeStyled(ws, row, 3, row, LAST_COL, step.videoUrl, {
+      // C-N: url
+      mergeStyled(ws, row, CONTENT_START_COL, row, LAST_COL, step.videoUrl, {
         font: { size: 10, color: { argb: C.primaryMid }, underline: true },
         fill: solidFill(C.white),
         border: { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER },
       });
-      ws.getCell(row, 3).value = {
+      ws.getCell(row, CONTENT_START_COL).value = {
         text: step.videoUrl,
         hyperlink: step.videoUrl,
       } as ExcelJS.CellHyperlinkValue;
@@ -470,7 +516,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
     border: { top: THIN_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
   });
 
-  ws.pageSetup.printArea = `A1:G${row}`;
+  ws.pageSetup.printArea = `A1:N${row}`;
 
   const buffer = await wb.xlsx.writeBuffer();
   return buffer as ArrayBuffer;
