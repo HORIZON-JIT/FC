@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { WorkInstruction, Step, Category, CATEGORY_LABELS, UpdateHistoryEntry, InstructionStatus } from '@/types/instruction';
 import { saveInstruction } from '@/lib/storage';
+import { buildExcelBuffer } from '@/lib/exportSpreadsheet';
+import { saveFileToDrive, getTargetFolder } from '@/lib/googleDrive';
+import { isGoogleConfigured, getAuthState } from '@/lib/googleAuth';
 import StepEditor from './StepEditor';
 
 const LAST_AUTHOR_KEY = 'last_author_name';
@@ -142,8 +145,11 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
     };
   };
 
-  const handleSave = (status: InstructionStatus) => {
-    const instruction = buildInstruction(status);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  const handleDraftSave = () => {
+    const instruction = buildInstruction('draft');
     if (!instruction) return;
 
     try {
@@ -152,19 +158,64 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
       alert(e instanceof Error ? e.message : '保存に失敗しました。');
       return;
     }
+    router.push('/instructions/drafts');
+  };
 
-    if (status === 'completed') {
-      downloadJson(instruction);
-      router.push(`/instructions/view?id=${instruction.id}`);
-    } else {
-      router.push('/instructions/drafts');
+  const handleComplete = async () => {
+    const instruction = buildInstruction('completed');
+    if (!instruction) return;
+
+    // Save locally first
+    try {
+      saveInstruction(instruction);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '保存に失敗しました。');
+      return;
     }
+
+    // Upload to Google Drive
+    const auth = getAuthState();
+    if (isGoogleConfigured() && auth.isSignedIn) {
+      setSaving(true);
+      setSaveMessage(null);
+      try {
+        // Upload Excel
+        const excelBuffer = await buildExcelBuffer(instruction);
+        await saveFileToDrive(
+          excelBuffer,
+          `${instruction.title}_手順書.xlsx`,
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        );
+        // Upload JSON
+        const jsonStr = JSON.stringify(instruction, null, 2);
+        const jsonBuffer = new TextEncoder().encode(jsonStr).buffer;
+        await saveFileToDrive(
+          jsonBuffer,
+          `${instruction.title}.json`,
+          'application/json',
+        );
+        const folderName = getTargetFolder()?.name || 'WorkInstructions';
+        setSaveMessage({ text: `「${folderName}」にExcel・JSONを保存しました`, type: 'success' });
+      } catch (err) {
+        console.error('Drive save error:', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        setSaveMessage({ text: `Driveへの保存に失敗: ${msg}`, type: 'error' });
+        // Still download JSON locally as fallback
+        downloadJson(instruction);
+      } finally {
+        setSaving(false);
+      }
+    } else {
+      // No Google auth — download JSON locally
+      downloadJson(instruction);
+    }
+
+    router.push(`/instructions/view?id=${instruction.id}`);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Default submit = complete
-    handleSave('completed');
+    handleComplete();
   };
 
   return (
@@ -271,31 +322,40 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
       </div>
 
       {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-3 pt-4">
-        <button
-          type="button"
-          onClick={() => handleSave('draft')}
-          className="flex-1 py-3 bg-amber-50 border border-amber-300 text-amber-700 rounded-lg font-medium hover:bg-amber-100 transition"
-        >
-          一時保存（下書き）
-        </button>
-        <button
-          type="submit"
-          className="flex-1 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg font-medium hover:from-blue-600 hover:to-indigo-600 transition shadow-sm"
-        >
-          {isEdit ? '更新して完成' : '完成として保存'}
-        </button>
+      <div className="space-y-3 pt-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            type="button"
+            onClick={handleDraftSave}
+            disabled={saving}
+            className="flex-1 py-3.5 bg-amber-50 border-2 border-amber-300 text-amber-700 rounded-xl font-bold text-lg hover:bg-amber-100 transition disabled:opacity-50"
+          >
+            下書き保存
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex-1 py-3.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white rounded-xl font-bold text-lg hover:from-emerald-600 hover:to-green-700 transition shadow-md disabled:opacity-50"
+          >
+            {saving ? '保存中...' : '完成'}
+          </button>
+        </div>
         <button
           type="button"
           onClick={() => router.back()}
-          className="sm:w-auto px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition"
+          className="w-full py-2.5 text-sm text-gray-500 hover:text-gray-700 transition"
         >
           キャンセル
         </button>
+        {saveMessage && (
+          <p className={`text-sm text-center ${saveMessage.type === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>
+            {saveMessage.text}
+          </p>
+        )}
+        <p className="text-xs text-slate-400 text-center">
+          「完成」を押すとGoogleドライブにExcel・JSONを出力します
+        </p>
       </div>
-      <p className="text-xs text-slate-400 text-center">
-        「完成として保存」するとJSONファイルが自動ダウンロードされます（次回更新用）
-      </p>
     </form>
   );
 }
