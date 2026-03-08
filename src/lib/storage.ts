@@ -25,7 +25,14 @@ export function saveInstruction(instruction: WorkInstruction): void {
   } else {
     all.push(instruction);
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+      throw new Error('ストレージの容量が不足しています。不要な手順書を削除するか、画像の数を減らしてください。');
+    }
+    throw e;
+  }
 }
 
 export function deleteInstruction(id: string): void {
