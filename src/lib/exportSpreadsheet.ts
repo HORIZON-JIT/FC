@@ -207,7 +207,7 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
   // Subtitle "作業手順書"
   ws.getRow(row).height = 22;
   mergeStyled(ws, row, 1, row, LAST_COL, '作業手順書', {
-    font: { size: 10, color: { argb: C.primaryLight } },
+    font: { size: 10, color: { argb: C.white } },
     fill: solidFill(C.primaryMid),
     alignment: { horizontal: 'center' },
     border: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
@@ -229,10 +229,14 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
     alignment: { horizontal: 'left' },
     border: { top: THIN_BORDER, bottom: THIN_BORDER, left: NO_BORDER, right: NO_BORDER },
   });
-  // Dates (right)
+  // Dates & author (right)
   const created = new Date(instruction.createdAt).toLocaleDateString('ja-JP');
   const updated = new Date(instruction.updatedAt).toLocaleDateString('ja-JP');
-  mergeStyled(ws, row, 6, row, LAST_COL, `作成: ${created}  |  更新: ${updated}  `, {
+  const creatorStr = instruction.createdBy ? `作成者: ${instruction.createdBy}` : '';
+  const updaterStr = instruction.updatedBy ? `更新者: ${instruction.updatedBy}` : '';
+  const authorParts = [creatorStr, updaterStr].filter(Boolean).join('  |  ');
+  const metaRight = `${authorParts ? authorParts + '  |  ' : ''}作成: ${created}  |  更新: ${updated}  `;
+  mergeStyled(ws, row, 6, row, LAST_COL, metaRight, {
     font: { size: 9, color: { argb: C.gray } },
     fill: solidFill(C.grayLight),
     alignment: { horizontal: 'right' },
@@ -492,6 +496,69 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
   });
 
   ws.pageSetup.printArea = `A1:N${row}`;
+
+  // ===== UPDATE HISTORY SHEET =====
+  if (instruction.updateHistory && instruction.updateHistory.length > 0) {
+    const hs = wb.addWorksheet('更新履歴', {
+      properties: { showGridLines: false },
+    });
+    hs.columns = [
+      { width: 6 },   // No.
+      { width: 20 },  // 更新日時
+      { width: 18 },  // 更新者
+      { width: 50 },  // メモ
+    ];
+
+    let hRow = 1;
+    // Title
+    hs.getRow(hRow).height = 36;
+    mergeStyled(hs, hRow, 1, hRow, 4, `更新履歴 - ${instruction.title}`, {
+      font: { bold: true, size: 14, color: { argb: C.white } },
+      fill: solidFill(C.primary),
+      alignment: { horizontal: 'center' },
+      border: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
+    });
+    hRow++;
+
+    // Headers
+    const hHeaders = ['No.', '更新日時', '更新者', 'メモ'];
+    hs.getRow(hRow).height = 26;
+    hHeaders.forEach((h, i) => {
+      const cell = hs.getCell(hRow, i + 1);
+      cell.value = h;
+      cell.font = { name: 'Arial', bold: true, size: 10, color: { argb: C.dark } };
+      cell.fill = solidFill(C.headerBg);
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      setBoxBorder(cell, {
+        top: { style: 'medium', color: { argb: C.borderBlue } },
+        bottom: { style: 'medium', color: { argb: C.borderBlue } },
+        left: THIN_BORDER,
+        right: THIN_BORDER,
+      });
+    });
+    hRow++;
+
+    // Data rows
+    instruction.updateHistory.forEach((entry, i) => {
+      const bgColor = i % 2 === 0 ? C.white : C.grayLight;
+      const dateStr = new Date(entry.updatedAt).toLocaleString('ja-JP');
+      const values = [i + 1, dateStr, entry.updatedBy, entry.note || ''];
+      hs.getRow(hRow).height = 24;
+      values.forEach((v, ci) => {
+        const cell = hs.getCell(hRow, ci + 1);
+        cell.value = v;
+        cell.font = { name: 'Arial', size: 10, color: { argb: C.dark } };
+        cell.fill = solidFill(bgColor);
+        cell.alignment = {
+          vertical: 'middle',
+          wrapText: true,
+          horizontal: ci === 0 ? 'center' : 'left',
+        };
+        setBoxBorder(cell);
+      });
+      hRow++;
+    });
+  }
 
   const buffer = await wb.xlsx.writeBuffer();
   return buffer as ArrayBuffer;
