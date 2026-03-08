@@ -25,6 +25,12 @@ export function getImageCaption(step: Step, index: number): string {
 
 export type Category = 'pc_work' | 'packing';
 
+export interface UpdateHistoryEntry {
+  updatedBy: string;
+  updatedAt: string;
+  note?: string;
+}
+
 export interface WorkInstruction {
   id: string;
   title: string;
@@ -33,6 +39,9 @@ export interface WorkInstruction {
   steps: Step[];
   createdAt: string;
   updatedAt: string;
+  createdBy?: string;
+  updatedBy?: string;
+  updateHistory?: UpdateHistoryEntry[];
 }
 
 export const CATEGORY_LABELS: Record<Category, string> = {

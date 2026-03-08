@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import { WorkInstruction, Step, Category, CATEGORY_LABELS } from '@/types/instruction';
+import { WorkInstruction, Step, Category, CATEGORY_LABELS, UpdateHistoryEntry } from '@/types/instruction';
 import { saveInstruction } from '@/lib/storage';
 import StepEditor from './StepEditor';
+
+const LAST_AUTHOR_KEY = 'last_author_name';
 
 interface InstructionFormProps {
   initialData?: WorkInstruction;
@@ -20,6 +22,17 @@ function createEmptyStep(orderIndex: number): Step {
   };
 }
 
+function getLastAuthorName(): string {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem(LAST_AUTHOR_KEY) || '';
+}
+
+function saveLastAuthorName(name: string) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(LAST_AUTHOR_KEY, name);
+  }
+}
+
 export default function InstructionForm({ initialData }: InstructionFormProps) {
   const router = useRouter();
   const isEdit = !!initialData;
@@ -30,6 +43,10 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
   const [steps, setSteps] = useState<Step[]>(
     initialData?.steps?.length ? initialData.steps : [createEmptyStep(0)]
   );
+  const [authorName, setAuthorName] = useState(
+    initialData?.updatedBy || initialData?.createdBy || getLastAuthorName()
+  );
+  const [updateNote, setUpdateNote] = useState('');
 
   const handleAddStep = () => {
     setSteps([...steps, createEmptyStep(steps.length)]);
@@ -71,8 +88,28 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
       alert('すべてのステップにタイトルを入力してください。');
       return;
     }
+    if (!authorName.trim()) {
+      alert(isEdit ? '更新者名を入力してください。' : '作成者名を入力してください。');
+      return;
+    }
+
+    const trimmedName = authorName.trim();
+    saveLastAuthorName(trimmedName);
 
     const now = new Date().toISOString();
+
+    let updateHistory: UpdateHistoryEntry[] = initialData?.updateHistory || [];
+    if (isEdit) {
+      const entry: UpdateHistoryEntry = {
+        updatedBy: trimmedName,
+        updatedAt: now,
+      };
+      if (updateNote.trim()) {
+        entry.note = updateNote.trim();
+      }
+      updateHistory = [...updateHistory, entry];
+    }
+
     const instruction: WorkInstruction = {
       id: initialData?.id || uuidv4(),
       title: title.trim(),
@@ -81,6 +118,9 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
       steps,
       createdAt: initialData?.createdAt || now,
       updatedAt: now,
+      createdBy: initialData?.createdBy || trimmedName,
+      updatedBy: isEdit ? trimmedName : undefined,
+      updateHistory: updateHistory.length > 0 ? updateHistory : undefined,
     };
 
     try {
@@ -129,6 +169,35 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
             ))}
           </select>
         </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {isEdit ? '更新者名' : '作成者名'} <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={authorName}
+            onChange={(e) => setAuthorName(e.target.value)}
+            className="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            placeholder={isEdit ? '更新者の名前を入力' : '作成者の名前を入力'}
+            required
+          />
+        </div>
+
+        {isEdit && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              更新メモ <span className="text-gray-400 font-normal">(任意)</span>
+            </label>
+            <input
+              type="text"
+              value={updateNote}
+              onChange={(e) => setUpdateNote(e.target.value)}
+              className="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              placeholder="例: ステップ3の画像を更新"
+            />
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">概要</label>

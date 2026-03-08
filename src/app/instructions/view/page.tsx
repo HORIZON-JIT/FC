@@ -285,9 +285,9 @@ function InstructionViewContent() {
         {instruction.description && (
           <p className="text-slate-600 mb-4">{instruction.description}</p>
         )}
-        <div className="text-xs text-slate-400 flex gap-4">
-          <span>作成日: {new Date(instruction.createdAt).toLocaleDateString('ja-JP')}</span>
-          <span>更新日: {new Date(instruction.updatedAt).toLocaleDateString('ja-JP')}</span>
+        <div className="text-xs text-slate-400 flex flex-wrap gap-4">
+          <span>作成日: {new Date(instruction.createdAt).toLocaleDateString('ja-JP')}{instruction.createdBy ? ` (${instruction.createdBy})` : ''}</span>
+          <span>更新日: {new Date(instruction.updatedAt).toLocaleDateString('ja-JP')}{instruction.updatedBy ? ` (${instruction.updatedBy})` : ''}</span>
           <span>{instruction.steps.length} ステップ</span>
         </div>
       </div>
