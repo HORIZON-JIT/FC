@@ -1,16 +1,17 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { WorkInstruction } from '@/types/instruction';
 import { saveInstruction } from '@/lib/storage';
-import DriveSyncButtons from '@/components/DriveSyncButtons';
+import { isGoogleConfigured, getAuthState } from '@/lib/googleAuth';
+import DriveJsonFilePicker from '@/components/DriveJsonFilePicker';
 
 export default function HomePage() {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [showJsonPicker, setShowJsonPicker] = useState(false);
 
   useEffect(() => {
     if (!importError) return;
@@ -18,33 +19,30 @@ export default function HomePage() {
     return () => clearTimeout(timer);
   }, [importError]);
 
-  const handleJsonImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    // Reset input so same file can be selected again
-    e.target.value = '';
+  const handleUpdateClick = () => {
+    const auth = getAuthState();
+    if (isGoogleConfigured() && auth.isSignedIn) {
+      setShowJsonPicker(true);
+    } else {
+      setImportError('Googleドライブに接続してください。右上のサインインボタンからログインできます。');
+    }
+  };
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const json = JSON.parse(ev.target?.result as string);
-        // Validate required fields
-        if (!json.id || !json.title || !json.steps || !Array.isArray(json.steps)) {
-          throw new Error('無効な手順書データです。');
-        }
-        const instruction = json as WorkInstruction;
-        // Mark as completed (imported for update)
-        instruction.status = 'completed';
-        saveInstruction(instruction);
-        router.push(`/instructions/edit?id=${instruction.id}`);
-      } catch (err) {
-        setImportError(err instanceof Error ? err.message : 'JSONファイルの読み込みに失敗しました。');
+  const handleJsonFileLoaded = (content: string, fileName: string) => {
+    try {
+      const json = JSON.parse(content);
+      if (!json.id || !json.title || !json.steps || !Array.isArray(json.steps)) {
+        throw new Error('無効な手順書データです。');
       }
-    };
-    reader.onerror = () => {
-      setImportError('ファイルの読み込みに失敗しました。');
-    };
-    reader.readAsText(file);
+      const instruction = json as WorkInstruction;
+      instruction.status = 'completed';
+      saveInstruction(instruction);
+      router.push(`/instructions/edit?id=${instruction.id}`);
+    } catch (err) {
+      setImportError(
+        err instanceof Error ? err.message : `${fileName}の読み込みに失敗しました。`
+      );
+    }
   };
 
   return (
@@ -93,7 +91,7 @@ export default function HomePage() {
         {/* 手順書更新 */}
         <button
           type="button"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={handleUpdateClick}
           className="group relative bg-white rounded-2xl border-2 border-slate-200 hover:border-emerald-400 p-8 text-center transition-all duration-200 hover:shadow-xl cursor-pointer"
         >
           <div className="inline-flex items-center justify-center w-14 h-14 bg-emerald-50 group-hover:bg-emerald-100 rounded-xl mb-4 transition">
@@ -102,15 +100,8 @@ export default function HomePage() {
             </svg>
           </div>
           <h2 className="text-lg font-bold text-slate-800 mb-2">手順書更新</h2>
-          <p className="text-sm text-slate-500">JSONを読み込んで更新</p>
+          <p className="text-sm text-slate-500">DriveのJSONを読み込んで更新</p>
         </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".json"
-          onChange={handleJsonImport}
-          className="hidden"
-        />
       </div>
 
       {/* Error message */}
@@ -120,10 +111,12 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Drive sync (secondary) */}
-      <div className="flex justify-center">
-        <DriveSyncButtons onDataLoaded={() => {}} />
-      </div>
+      {/* Drive JSON File Picker */}
+      <DriveJsonFilePicker
+        open={showJsonPicker}
+        onClose={() => setShowJsonPicker(false)}
+        onFileLoaded={handleJsonFileLoaded}
+      />
     </div>
   );
 }
