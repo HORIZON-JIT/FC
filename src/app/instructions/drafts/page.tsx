@@ -23,6 +23,12 @@ export default function DraftsPage() {
     setDrafts((prev) => prev.filter((d) => d.id !== id));
   };
 
+  const handleDeleteAll = () => {
+    if (!confirm(`下書き ${drafts.length} 件をすべて削除しますか？\nブラウザの保存容量が解放されます。`)) return;
+    drafts.forEach((d) => deleteInstruction(d.id));
+    setDrafts([]);
+  };
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="flex items-center gap-3 mb-8">
@@ -34,6 +40,14 @@ export default function DraftsPage() {
         </Link>
         <h1 className="text-2xl font-bold text-slate-800">途中から編集</h1>
         <span className="text-sm text-slate-400 ml-1">{drafts.length} 件</span>
+        {drafts.length >= 2 && (
+          <button
+            onClick={handleDeleteAll}
+            className="ml-auto text-xs px-3 py-1.5 text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition"
+          >
+            すべて削除
+          </button>
+        )}
       </div>
 
       {drafts.length === 0 ? (
