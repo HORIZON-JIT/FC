@@ -173,6 +173,38 @@ async function findFile(folderId: string): Promise<string | null> {
   return files.length > 0 ? files[0].id : null;
 }
 
+export interface DriveFileInfo {
+  id: string;
+  name: string;
+}
+
+export async function listJsonFilesInFolder(folderId: string): Promise<DriveFileInfo[]> {
+  const res = await gapi.client.request<DriveFileList>({
+    path: 'https://www.googleapis.com/drive/v3/files',
+    params: {
+      q: `'${folderId}' in parents and mimeType='application/json' and trashed=false`,
+      fields: 'files(id,name)',
+      orderBy: 'modifiedTime desc',
+      pageSize: '100',
+      supportsAllDrives: 'true',
+      includeItemsFromAllDrives: 'true',
+    },
+  });
+  return res.result.files.map((f) => ({ id: f.id, name: f.name }));
+}
+
+export async function downloadDriveFile(fileId: string): Promise<string> {
+  const token = gapi.client.getToken()?.access_token;
+  if (!token) throw new Error('Google認証が必要です');
+
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) throw new Error(`Drive API ${res.status}`);
+  return res.text();
+}
+
 export async function saveFileToDrive(
   buffer: ArrayBuffer,
   fileName: string,
