@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { WorkInstruction } from '@/types/instruction';
 import { getInstruction } from '@/lib/storage';
+import { getTempData, removeTempData } from '@/lib/tempStorage';
 import InstructionForm from '@/components/InstructionForm';
 
 function EditInstructionContent() {
@@ -15,24 +16,26 @@ function EditInstructionContent() {
   useEffect(() => {
     const source = searchParams.get('source');
     if (source === 'drive') {
-      // Driveから読み込んだデータをsessionStorageから取得
-      const raw = sessionStorage.getItem('drive_import_instruction');
-      if (raw) {
-        sessionStorage.removeItem('drive_import_instruction');
-        try {
-          setInstruction(JSON.parse(raw) as WorkInstruction);
-        } catch {
-          setInstruction(null);
+      // Driveから読み込んだデータをIndexedDBから取得
+      getTempData('drive_import_instruction').then((raw) => {
+        if (raw) {
+          removeTempData('drive_import_instruction');
+          try {
+            setInstruction(JSON.parse(raw) as WorkInstruction);
+          } catch {
+            setInstruction(null);
+          }
         }
-      }
+        setLoading(false);
+      }).catch(() => setLoading(false));
     } else {
       const id = searchParams.get('id');
       if (id) {
         const data = getInstruction(id);
         setInstruction(data || null);
       }
+      setLoading(false);
     }
-    setLoading(false);
   }, [searchParams]);
 
   if (loading) {

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { WorkInstruction } from '@/types/instruction';
 import { isGoogleConfigured, getAuthState } from '@/lib/googleAuth';
 import DriveJsonFilePicker from '@/components/DriveJsonFilePicker';
+import { setTempData } from '@/lib/tempStorage';
 
 export default function HomePage() {
   const router = useRouter();
@@ -37,13 +38,13 @@ export default function HomePage() {
     }
   };
 
-  const handlePreviewFileLoaded = (content: string, fileName: string) => {
+  const handlePreviewFileLoaded = async (content: string, fileName: string) => {
     try {
       const json = JSON.parse(content);
       if (!json.id || !json.title || !json.steps || !Array.isArray(json.steps)) {
         throw new Error('無効な手順書データです。');
       }
-      sessionStorage.setItem('preview_instruction', JSON.stringify(json));
+      await setTempData('preview_instruction', JSON.stringify(json));
       router.push('/instructions/view?source=preview');
     } catch (err) {
       setImportError(
@@ -52,7 +53,7 @@ export default function HomePage() {
     }
   };
 
-  const handleJsonFileLoaded = (content: string, fileName: string) => {
+  const handleJsonFileLoaded = async (content: string, fileName: string) => {
     try {
       const json = JSON.parse(content);
       if (!json.id || !json.title || !json.steps || !Array.isArray(json.steps)) {
@@ -60,8 +61,7 @@ export default function HomePage() {
       }
       const instruction = json as WorkInstruction;
       instruction.status = 'completed';
-      // sessionStorageに一時保管（localStorageを圧迫しない）
-      sessionStorage.setItem('drive_import_instruction', JSON.stringify(instruction));
+      await setTempData('drive_import_instruction', JSON.stringify(instruction));
       router.push('/instructions/edit?source=drive');
     } catch (err) {
       setImportError(

@@ -12,6 +12,7 @@ import { generateShareUrl, parseShareData, getViewPageBaseUrl, ShareResult } fro
 import ShareLinkModal from '@/components/ShareLinkModal';
 import { saveFileToDrive, getTargetFolder } from '@/lib/googleDrive';
 import { isGoogleConfigured, getAuthState, addAuthListener, GoogleAuthState } from '@/lib/googleAuth';
+import { getTempData } from '@/lib/tempStorage';
 
 function getYouTubeEmbedUrl(url: string): string | null {
   try {
@@ -63,17 +64,18 @@ function InstructionViewContent() {
       }
     }
 
-    // Priority 2: preview from sessionStorage
+    // Priority 2: preview from IndexedDB
     if (searchParams.get('source') === 'preview') {
-      const raw = sessionStorage.getItem('preview_instruction');
-      if (raw) {
-        try {
-          setInstruction(JSON.parse(raw) as WorkInstruction);
-          setIsPreviewView(true);
-          setLoading(false);
-          return;
-        } catch { /* fall through */ }
-      }
+      getTempData('preview_instruction').then((raw) => {
+        if (raw) {
+          try {
+            setInstruction(JSON.parse(raw) as WorkInstruction);
+            setIsPreviewView(true);
+          } catch { /* fall through */ }
+        }
+        setLoading(false);
+      }).catch(() => setLoading(false));
+      return;
     }
 
     // Priority 3: load from localStorage by id
