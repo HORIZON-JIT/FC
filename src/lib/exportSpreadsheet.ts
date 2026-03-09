@@ -383,6 +383,27 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
       // Row count: convert pixel height to Excel row count using pt-to-px ratio
       const imageRows = Math.max(3, Math.ceil(imgH / IMAGE_ROW_HEIGHT_PX) + 1);
 
+      // Caption row (above image)
+      const caption = getImageCaption(step, imgIdx);
+      if (caption) {
+        ws.getRow(row).height = calcRowHeight(caption, 60, 16, 22);
+
+        const aCap = ws.getCell(row, 1);
+        aCap.fill = solidFill(C.accent);
+        setBoxBorder(aCap, { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER });
+
+        const bCap = ws.getCell(row, 2);
+        bCap.fill = solidFill(C.grayLight);
+        setBoxBorder(bCap, { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER });
+
+        mergeStyled(ws, row, CONTENT_START_COL, row, LAST_COL, caption, {
+          font: { size: 9, bold: true, color: { argb: C.dark } },
+          fill: solidFill(C.grayLight),
+          border: { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER },
+        });
+        row++;
+      }
+
       const imageStartRow = row;
 
       for (let r = 0; r < imageRows; r++) {
@@ -415,37 +436,25 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
         }
       }
 
-      // Place image with tl + ext (pixel size) to guarantee correct aspect ratio
+      // Place image anchored to cell with EMU offsets for precise positioning
       const { base64, extension } = parseDataUrl(stepImages[imgIdx]);
       const imageId = wb.addImage({ base64, extension });
+      const EMU_PER_PX = 9525; // 1 pixel = 9525 EMUs at 96 DPI
+      const marginX = 8 * EMU_PER_PX; // 8px left margin
+      const marginY = 4 * EMU_PER_PX; // 4px top margin
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ws.addImage(imageId, {
-        tl: { col: CONTENT_START_COL - 1 + 0.2, row: imageStartRow - 1 + 0.3 },
-        ext: { width: imgW, height: imgH },
+        tl: {
+          nativeCol: CONTENT_START_COL - 1,
+          nativeColOff: marginX,
+          nativeRow: imageStartRow - 1,
+          nativeRowOff: marginY,
+        },
+        ext: { width: imgW * EMU_PER_PX, height: imgH * EMU_PER_PX },
+        editAs: 'oneCell',
       } as any);
 
       row = imageStartRow + imageRows;
-
-      // Caption row
-      const caption = getImageCaption(step, imgIdx);
-      if (caption) {
-        ws.getRow(row).height = calcRowHeight(caption, 60, 16, 22);
-
-        const aCap = ws.getCell(row, 1);
-        aCap.fill = solidFill(C.accent);
-        setBoxBorder(aCap, { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER });
-
-        const bCap = ws.getCell(row, 2);
-        bCap.fill = solidFill(C.grayLight);
-        setBoxBorder(bCap, { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER });
-
-        mergeStyled(ws, row, CONTENT_START_COL, row, LAST_COL, caption, {
-          font: { size: 9, italic: true, color: { argb: C.gray } },
-          fill: solidFill(C.grayLight),
-          border: { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER },
-        });
-        row++;
-      }
     }
 
     // --- Video URL ---
