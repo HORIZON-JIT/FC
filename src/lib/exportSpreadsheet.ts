@@ -436,13 +436,22 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
         }
       }
 
-      // Place image with tl + ext (pixel size) to guarantee correct aspect ratio
+      // Place image anchored to cell with EMU offsets for precise positioning
       const { base64, extension } = parseDataUrl(stepImages[imgIdx]);
       const imageId = wb.addImage({ base64, extension });
+      const EMU_PER_PX = 9525; // 1 pixel = 9525 EMUs at 96 DPI
+      const marginX = 8 * EMU_PER_PX; // 8px left margin
+      const marginY = 4 * EMU_PER_PX; // 4px top margin
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ws.addImage(imageId, {
-        tl: { col: CONTENT_START_COL - 1 + 0.2, row: imageStartRow - 1 + 0.3 },
-        ext: { width: imgW, height: imgH },
+        tl: {
+          nativeCol: CONTENT_START_COL - 1,
+          nativeColOff: marginX,
+          nativeRow: imageStartRow - 1,
+          nativeRowOff: marginY,
+        },
+        ext: { width: imgW * EMU_PER_PX, height: imgH * EMU_PER_PX },
+        editAs: 'oneCell',
       } as any);
 
       row = imageStartRow + imageRows;
