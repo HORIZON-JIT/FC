@@ -34,6 +34,7 @@ function InstructionViewContent() {
   const [instruction, setInstruction] = useState<WorkInstruction | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSharedView, setIsSharedView] = useState(false);
+  const [isPreviewView, setIsPreviewView] = useState(false);
   const [shareResult, setShareResult] = useState<ShareResult | null>(null);
   const [auth, setAuth] = useState<GoogleAuthState>(getAuthState());
   const [driveSaving, setDriveSaving] = useState(false);
@@ -62,7 +63,20 @@ function InstructionViewContent() {
       }
     }
 
-    // Priority 2: load from localStorage by id
+    // Priority 2: preview from sessionStorage
+    if (searchParams.get('source') === 'preview') {
+      const raw = sessionStorage.getItem('preview_instruction');
+      if (raw) {
+        try {
+          setInstruction(JSON.parse(raw) as WorkInstruction);
+          setIsPreviewView(true);
+          setLoading(false);
+          return;
+        } catch { /* fall through */ }
+      }
+    }
+
+    // Priority 3: load from localStorage by id
     const id = searchParams.get('id');
     if (id) {
       const data = getInstruction(id);
@@ -173,6 +187,21 @@ function InstructionViewContent() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
+      {/* Preview banner */}
+      {isPreviewView && (
+        <div className="bg-violet-50 border border-violet-200 rounded-lg px-4 py-3 mb-4 flex items-center justify-between no-print">
+          <p className="text-sm text-violet-800">
+            DriveのJSONファイルをプレビュー表示しています
+          </p>
+          <button
+            onClick={handleImport}
+            className="px-3 py-1.5 bg-violet-600 text-white rounded text-sm hover:bg-violet-700 transition"
+          >
+            インポートして保存
+          </button>
+        </div>
+      )}
+
       {/* Shared view banner */}
       {isSharedView && (
         <div className="bg-purple-50 border border-purple-200 rounded-lg px-4 py-3 mb-4 flex items-center justify-between no-print">
@@ -239,7 +268,7 @@ function InstructionViewContent() {
         >
           Word出力
         </button>
-        {!isSharedView && (
+        {!isSharedView && !isPreviewView && (
           <>
             <button
               onClick={handleShare}

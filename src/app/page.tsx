@@ -11,6 +11,7 @@ export default function HomePage() {
   const router = useRouter();
   const [importError, setImportError] = useState<string | null>(null);
   const [showJsonPicker, setShowJsonPicker] = useState(false);
+  const [showPreviewPicker, setShowPreviewPicker] = useState(false);
 
   useEffect(() => {
     if (!importError) return;
@@ -24,6 +25,30 @@ export default function HomePage() {
       setShowJsonPicker(true);
     } else {
       setImportError('Googleドライブに接続してください。右上のサインインボタンからログインできます。');
+    }
+  };
+
+  const handlePreviewClick = () => {
+    const auth = getAuthState();
+    if (isGoogleConfigured() && auth.isSignedIn) {
+      setShowPreviewPicker(true);
+    } else {
+      setImportError('Googleドライブに接続してください。右上のサインインボタンからログインできます。');
+    }
+  };
+
+  const handlePreviewFileLoaded = (content: string, fileName: string) => {
+    try {
+      const json = JSON.parse(content);
+      if (!json.id || !json.title || !json.steps || !Array.isArray(json.steps)) {
+        throw new Error('無効な手順書データです。');
+      }
+      sessionStorage.setItem('preview_instruction', JSON.stringify(json));
+      router.push('/instructions/view?source=preview');
+    } catch (err) {
+      setImportError(
+        err instanceof Error ? err.message : `${fileName}の読み込みに失敗しました。`
+      );
     }
   };
 
@@ -59,7 +84,7 @@ export default function HomePage() {
       </div>
 
       {/* 3 workflow buttons */}
-      <div className="grid gap-6 sm:grid-cols-3 mb-8">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
         {/* 新規作成 */}
         <Link
           href="/instructions/new"
@@ -102,6 +127,22 @@ export default function HomePage() {
           <h2 className="text-lg font-bold text-slate-800 mb-2">手順書更新</h2>
           <p className="text-sm text-slate-500">DriveのJSONを読み込んで更新</p>
         </button>
+
+        {/* 手順書確認 */}
+        <button
+          type="button"
+          onClick={handlePreviewClick}
+          className="group relative bg-white rounded-2xl border-2 border-slate-200 hover:border-violet-400 p-8 text-center transition-all duration-200 hover:shadow-xl cursor-pointer"
+        >
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-violet-50 group-hover:bg-violet-100 rounded-xl mb-4 transition">
+            <svg className="w-7 h-7 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-bold text-slate-800 mb-2">手順書確認</h2>
+          <p className="text-sm text-slate-500">DriveのJSONをプレビュー表示</p>
+        </button>
       </div>
 
       {/* Error message */}
@@ -116,6 +157,13 @@ export default function HomePage() {
         open={showJsonPicker}
         onClose={() => setShowJsonPicker(false)}
         onFileLoaded={handleJsonFileLoaded}
+      />
+
+      {/* Preview JSON File Picker */}
+      <DriveJsonFilePicker
+        open={showPreviewPicker}
+        onClose={() => setShowPreviewPicker(false)}
+        onFileLoaded={handlePreviewFileLoaded}
       />
     </div>
   );
