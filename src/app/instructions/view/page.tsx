@@ -226,48 +226,52 @@ function InstructionViewContent() {
           一覧に戻る
         </Link>
         <div className="flex-1" />
-        <button
-          onClick={handlePrint}
-          className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-100 transition"
-        >
-          印刷
-        </button>
-        <button
-          onClick={handlePdfExport}
-          className="px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-600 rounded-lg text-sm hover:bg-rose-100 transition"
-        >
-          PDF出力
-        </button>
-        {isGoogleConfigured() && auth.isSignedIn && (
-          <button
-            onClick={handlePdfToDrive}
-            disabled={driveSaving}
-            className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg text-sm hover:bg-amber-100 transition disabled:opacity-50"
-          >
-            {driveSaving ? '保存中...' : 'PDFをDriveに保存'}
-          </button>
+        {!isPreviewView && (
+          <>
+            <button
+              onClick={handlePrint}
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-100 transition"
+            >
+              印刷
+            </button>
+            <button
+              onClick={handlePdfExport}
+              className="px-3 py-1.5 bg-rose-50 border border-rose-200 text-rose-600 rounded-lg text-sm hover:bg-rose-100 transition"
+            >
+              PDF出力
+            </button>
+            {isGoogleConfigured() && auth.isSignedIn && (
+              <button
+                onClick={handlePdfToDrive}
+                disabled={driveSaving}
+                className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg text-sm hover:bg-amber-100 transition disabled:opacity-50"
+              >
+                {driveSaving ? '保存中...' : 'PDFをDriveに保存'}
+              </button>
+            )}
+            <button
+              onClick={() => exportToExcel(instruction)}
+              className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-600 rounded-lg text-sm hover:bg-emerald-100 transition"
+            >
+              Excel出力
+            </button>
+            {isGoogleConfigured() && auth.isSignedIn && (
+              <button
+                onClick={handleExcelToDrive}
+                disabled={driveSaving}
+                className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg text-sm hover:bg-amber-100 transition disabled:opacity-50"
+              >
+                {driveSaving ? '保存中...' : 'ExcelをDriveに保存'}
+              </button>
+            )}
+            <button
+              onClick={() => exportToWord(instruction)}
+              className="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-600 rounded-lg text-sm hover:bg-blue-100 transition"
+            >
+              Word出力
+            </button>
+          </>
         )}
-        <button
-          onClick={() => exportToExcel(instruction)}
-          className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-600 rounded-lg text-sm hover:bg-emerald-100 transition"
-        >
-          Excel出力
-        </button>
-        {isGoogleConfigured() && auth.isSignedIn && (
-          <button
-            onClick={handleExcelToDrive}
-            disabled={driveSaving}
-            className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg text-sm hover:bg-amber-100 transition disabled:opacity-50"
-          >
-            {driveSaving ? '保存中...' : 'ExcelをDriveに保存'}
-          </button>
-        )}
-        <button
-          onClick={() => exportToWord(instruction)}
-          className="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-600 rounded-lg text-sm hover:bg-blue-100 transition"
-        >
-          Word出力
-        </button>
         {!isSharedView && !isPreviewView && (
           <>
             <button
