@@ -232,43 +232,42 @@ export async function saveFileToDrive(
     ? { name: fileName, mimeType }
     : { name: fileName, mimeType, parents: [folderId] };
 
-  const boundary = 'boundary' + Date.now();
-  const metadataJson = JSON.stringify(metadata);
+  // Use resumable upload for reliability with large files
+  const initUrl = existingFileId
+    ? `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=resumable&supportsAllDrives=true`
+    : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true';
 
-  // Build multipart body using Uint8Array for correct binary handling
-  const encoder = new TextEncoder();
-  const metadataPart = encoder.encode(
-    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadataJson}\r\n`
-  );
-  const fileHeader = encoder.encode(
-    `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`
-  );
-  const closing = encoder.encode(`\r\n--${boundary}--`);
-  const fileBytes = new Uint8Array(buffer);
-
-  const body = new Uint8Array(metadataPart.length + fileHeader.length + fileBytes.length + closing.length);
-  let offset = 0;
-  body.set(metadataPart, offset); offset += metadataPart.length;
-  body.set(fileHeader, offset); offset += fileHeader.length;
-  body.set(fileBytes, offset); offset += fileBytes.length;
-  body.set(closing, offset);
-
-  const url = existingFileId
-    ? `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=multipart&supportsAllDrives=true`
-    : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true';
-
-  const res = await fetch(url, {
+  const initRes = await fetch(initUrl, {
     method: existingFileId ? 'PATCH' : 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': `multipart/related; boundary=${boundary}`,
+      'Content-Type': 'application/json; charset=UTF-8',
+      'X-Upload-Content-Type': mimeType,
+      'X-Upload-Content-Length': String(buffer.byteLength),
     },
-    body: body.buffer,
+    body: JSON.stringify(metadata),
   });
 
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`Drive API ${res.status}: ${errorText}`);
+  if (!initRes.ok) {
+    const errorText = await initRes.text();
+    throw new Error(`Drive API ${initRes.status}: ${errorText}`);
+  }
+
+  const uploadUrl = initRes.headers.get('Location');
+  if (!uploadUrl) throw new Error('アップロードURLを取得できませんでした');
+
+  const uploadRes = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': mimeType,
+      'Content-Length': String(buffer.byteLength),
+    },
+    body: buffer,
+  });
+
+  if (!uploadRes.ok) {
+    const errorText = await uploadRes.text();
+    throw new Error(`Drive API ${uploadRes.status}: ${errorText}`);
   }
 }
 

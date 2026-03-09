@@ -180,7 +180,11 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
       setTimeout(() => router.push('/'), 1500);
     } catch (err) {
       console.error('Drive save error:', err);
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error
+        ? err.message
+        : (typeof err === 'object' && err !== null && 'result' in err)
+          ? JSON.stringify((err as { result: unknown }).result)
+          : String(err);
       setSaveMessage({ text: `Driveへの保存に失敗: ${msg}`, type: 'error' });
     } finally {
       setSaving(false);
