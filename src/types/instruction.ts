@@ -47,6 +47,7 @@ export interface WorkInstruction {
   updatedBy?: string;
   updateHistory?: UpdateHistoryEntry[];
   status?: InstructionStatus;
+  keywords?: string[];
 }
 
 export const CATEGORY_LABELS: Record<string, string> = {
