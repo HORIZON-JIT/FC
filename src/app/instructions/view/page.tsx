@@ -325,6 +325,18 @@ function InstructionViewContent() {
           <span>更新日: {new Date(instruction.updatedAt).toLocaleDateString('ja-JP')}{instruction.updatedBy ? ` (${instruction.updatedBy})` : ''}</span>
           <span>{instruction.steps.length} ステップ</span>
         </div>
+        {instruction.keywords && instruction.keywords.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {instruction.keywords.map((kw, i) => (
+              <span
+                key={i}
+                className="inline-block text-xs px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full border border-slate-200"
+              >
+                {kw}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Steps */}

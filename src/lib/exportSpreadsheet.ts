@@ -497,6 +497,66 @@ export async function buildExcelBuffer(instruction: WorkInstruction): Promise<Ar
 
   ws.pageSetup.printArea = `A1:N${row}`;
 
+  // ===== KEYWORDS SHEET =====
+  if (instruction.keywords && instruction.keywords.length > 0) {
+    const ks = wb.addWorksheet('関連キーワード', {
+      properties: { showGridLines: false },
+    });
+    ks.columns = [
+      { width: 6 },   // No.
+      { width: 40 },  // キーワード
+    ];
+
+    let kRow = 1;
+    // Title
+    ks.getRow(kRow).height = 36;
+    mergeStyled(ks, kRow, 1, kRow, 2, `関連キーワード - ${instruction.title}`, {
+      font: { bold: true, size: 14, color: { argb: C.white } },
+      fill: solidFill(C.primary),
+      alignment: { horizontal: 'center' },
+      border: { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER },
+    });
+    kRow++;
+
+    // Headers
+    const kHeaders = ['No.', 'キーワード'];
+    ks.getRow(kRow).height = 26;
+    kHeaders.forEach((h, i) => {
+      const cell = ks.getCell(kRow, i + 1);
+      cell.value = h;
+      cell.font = { name: 'Arial', bold: true, size: 10, color: { argb: C.dark } };
+      cell.fill = solidFill(C.headerBg);
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      setBoxBorder(cell, {
+        top: { style: 'medium', color: { argb: C.borderBlue } },
+        bottom: { style: 'medium', color: { argb: C.borderBlue } },
+        left: THIN_BORDER,
+        right: THIN_BORDER,
+      });
+    });
+    kRow++;
+
+    // Data rows
+    instruction.keywords.forEach((kw, i) => {
+      const bgColor = i % 2 === 0 ? C.white : C.grayLight;
+      ks.getRow(kRow).height = 24;
+      const numCell = ks.getCell(kRow, 1);
+      numCell.value = i + 1;
+      numCell.font = { name: 'Arial', size: 10, color: { argb: C.dark } };
+      numCell.fill = solidFill(bgColor);
+      numCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      setBoxBorder(numCell);
+
+      const kwCell = ks.getCell(kRow, 2);
+      kwCell.value = kw;
+      kwCell.font = { name: 'Arial', size: 10, color: { argb: C.dark } };
+      kwCell.fill = solidFill(bgColor);
+      kwCell.alignment = { vertical: 'middle', wrapText: true };
+      setBoxBorder(kwCell);
+      kRow++;
+    });
+  }
+
   // ===== UPDATE HISTORY SHEET =====
   if (instruction.updateHistory && instruction.updateHistory.length > 0) {
     const hs = wb.addWorksheet('更新履歴', {

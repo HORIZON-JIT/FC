@@ -58,6 +58,9 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
     initialData?.updatedBy || initialData?.createdBy || getLastAuthorName()
   );
   const [updateNote, setUpdateNote] = useState('');
+  const [keywordsText, setKeywordsText] = useState(
+    initialData?.keywords?.join(', ') || ''
+  );
 
   const handleAddStep = () => {
     setSteps([...steps, createEmptyStep(steps.length)]);
@@ -125,6 +128,11 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
       updateHistory = [...updateHistory, entry];
     }
 
+    const parsedKeywords = keywordsText
+      .split(/[,、\s]+/)
+      .map((k) => k.trim())
+      .filter(Boolean);
+
     return {
       id: initialData?.id || uuidv4(),
       title: title.trim(),
@@ -137,6 +145,7 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
       updatedBy: isEdit && trimmedName ? trimmedName : initialData?.updatedBy,
       updateHistory: updateHistory.length > 0 ? updateHistory : undefined,
       status,
+      keywords: parsedKeywords.length > 0 ? parsedKeywords : undefined,
     };
   };
 
@@ -328,6 +337,20 @@ export default function InstructionForm({ initialData }: InstructionFormProps) {
             className="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-y"
             placeholder="この手順書の概要を記入してください"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            関連キーワード <span className="text-gray-400 font-normal">(任意)</span>
+          </label>
+          <input
+            type="text"
+            value={keywordsText}
+            onChange={(e) => setKeywordsText(e.target.value)}
+            className="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            placeholder="例: 出荷, 伝票, 梱包（カンマ区切りで入力）"
+          />
+          <p className="mt-1 text-xs text-gray-400">資料検索時にヒットさせるためのキーワードを入力してください</p>
         </div>
       </div>
 
