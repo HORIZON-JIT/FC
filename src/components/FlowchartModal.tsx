@@ -42,12 +42,12 @@ export default function FlowchartModal({ instruction, onClose }: Props) {
 
         if (!cancelled && containerRef.current) {
           containerRef.current.innerHTML = svg;
+          svgRef.current = svg;
           const svgEl = containerRef.current.querySelector('svg');
           if (svgEl) {
             svgEl.style.maxWidth = '100%';
             svgEl.style.height = 'auto';
           }
-          svgRef.current = containerRef.current.innerHTML;
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e ?? 'フロー図の生成に失敗しました'));
@@ -87,7 +87,10 @@ export default function FlowchartModal({ instruction, onClose }: Props) {
   const downloadPng = () => {
     const svgEl = containerRef.current?.querySelector('svg');
     if (!svgEl) return;
-    const data = new XMLSerializer().serializeToString(svgEl);
+    const clone = svgEl.cloneNode(true) as SVGSVGElement;
+    clone.style.maxWidth = '';
+    clone.style.height = '';
+    const data = new XMLSerializer().serializeToString(clone);
     const blob = new Blob([data], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const img = new Image();
