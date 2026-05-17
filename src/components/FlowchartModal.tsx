@@ -13,7 +13,6 @@ export default function FlowchartModal({ instruction, onClose }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const svgRef = useRef<string>('');
   const mermaidRef = useRef<string>('');
   const [mermaidCopied, setMermaidCopied] = useState(false);
 
@@ -42,7 +41,6 @@ export default function FlowchartModal({ instruction, onClose }: Props) {
 
         if (!cancelled && containerRef.current) {
           containerRef.current.innerHTML = svg;
-          svgRef.current = svg;
           const svgEl = containerRef.current.querySelector('svg');
           if (svgEl) {
             svgEl.style.maxWidth = '100%';
@@ -60,15 +58,6 @@ export default function FlowchartModal({ instruction, onClose }: Props) {
     return () => { cancelled = true; };
   }, [instruction]);
 
-  const downloadSvg = () => {
-    const blob = new Blob([svgRef.current], { type: 'image/svg+xml' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${instruction.title}_フロー図.svg`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
-
   const copyMermaid = () => {
     navigator.clipboard.writeText(mermaidRef.current);
     setMermaidCopied(true);
@@ -82,37 +71,6 @@ export default function FlowchartModal({ instruction, onClose }: Props) {
     a.download = `${instruction.title}_フロー図.mmd`;
     a.click();
     URL.revokeObjectURL(a.href);
-  };
-
-  const downloadPng = () => {
-    const svgEl = containerRef.current?.querySelector('svg');
-    if (!svgEl) return;
-    const clone = svgEl.cloneNode(true) as SVGSVGElement;
-    clone.style.maxWidth = '';
-    clone.style.height = '';
-    const data = new XMLSerializer().serializeToString(clone);
-    const blob = new Blob([data], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth * 2;
-      canvas.height = img.naturalHeight * 2;
-      const ctx = canvas.getContext('2d')!;
-      ctx.scale(2, 2);
-      ctx.drawImage(img, 0, 0);
-      canvas.toBlob((pngBlob) => {
-        if (pngBlob) {
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(pngBlob);
-          a.download = `${instruction.title}_フロー図.png`;
-          a.click();
-          URL.revokeObjectURL(a.href);
-        }
-      }, 'image/png');
-      URL.revokeObjectURL(url);
-    };
-    img.src = url;
   };
 
   return (
@@ -145,18 +103,6 @@ export default function FlowchartModal({ instruction, onClose }: Props) {
               className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-100 transition"
             >
               Mermaid保存
-            </button>
-            <button
-              onClick={downloadPng}
-              className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-100 transition"
-            >
-              画像保存
-            </button>
-            <button
-              onClick={downloadSvg}
-              className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-100 transition"
-            >
-              SVG保存
             </button>
             <button
               onClick={onClose}
