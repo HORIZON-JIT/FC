@@ -29,7 +29,7 @@ export default function FlowchartModal({ instruction, onClose }: Props) {
           startOnLoad: false,
           theme: 'default',
           flowchart: {
-            useMaxWidth: true,
+            useMaxWidth: false,
             htmlLabels: true,
             curve: 'linear',
             padding: 15,
@@ -42,6 +42,11 @@ export default function FlowchartModal({ instruction, onClose }: Props) {
 
         if (!cancelled && containerRef.current) {
           containerRef.current.innerHTML = svg;
+          const svgEl = containerRef.current.querySelector('svg');
+          if (svgEl) {
+            svgEl.style.maxWidth = '100%';
+            svgEl.style.height = 'auto';
+          }
           svgRef.current = containerRef.current.innerHTML;
         }
       } catch (e) {

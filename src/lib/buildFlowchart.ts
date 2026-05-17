@@ -82,7 +82,11 @@ export function buildFlowchartDefinition(instruction: WorkInstruction): string {
     segments.push({ kind: 'group', decisionStep, branches });
   }
 
-  const lines: string[] = ['graph TD'];
+  const lines: string[] = [
+    'graph TD',
+    '  classDef terminal fill:#7EC8E3,stroke:#5BA3BC,color:#1a1a1a',
+    '  classDef decision fill:#FFE57A,stroke:#D4A017,color:#1a1a1a',
+  ];
   let nodeCounter = 0;
   let decCounter = 0;
   const nid = new Map<string, string>();
@@ -112,7 +116,7 @@ export function buildFlowchartDefinition(instruction: WorkInstruction): string {
       const id = nodeId(s);
       const hasJumps = s.jumps && s.jumps.length > 0;
       if (hasJumps) {
-        lines.push(`  ${id}{${dlbl(s)}}`);
+        lines.push(`  ${id}{${dlbl(s)}}:::decision`);
       } else {
         lines.push(`  ${id}[${lbl(s)}]`);
       }
@@ -141,7 +145,7 @@ export function buildFlowchartDefinition(instruction: WorkInstruction): string {
 
     if (nestingStep) {
       const decId = nodeId(nestingStep);
-      lines.push(`  ${decId}{${dlbl(nestingStep)}}`);
+      lines.push(`  ${decId}{${dlbl(nestingStep)}}:::decision`);
       if (prev) lines.push(`  ${prev} --> ${decId}`);
       if (!firstNode) firstNode = decId;
 
@@ -174,7 +178,7 @@ export function buildFlowchartDefinition(instruction: WorkInstruction): string {
     return { firstNode, exits: prev ? [prev] : [] };
   }
 
-  lines.push('  START(["　開始　"])');
+  lines.push('  START(["　開始　"]):::terminal');
   let prev: string[] = ['START'];
   let prevLabel: string | null = null;
 
@@ -183,7 +187,7 @@ export function buildFlowchartDefinition(instruction: WorkInstruction): string {
       const id = nodeId(seg.step);
       const hasJumps = seg.step.jumps && seg.step.jumps.length > 0;
       if (hasJumps) {
-        lines.push(`  ${id}{${dlbl(seg.step)}}`);
+        lines.push(`  ${id}{${dlbl(seg.step)}}:::decision`);
       } else {
         lines.push(`  ${id}[${lbl(seg.step)}]`);
       }
@@ -209,10 +213,10 @@ export function buildFlowchartDefinition(instruction: WorkInstruction): string {
       let decId: string;
       if (seg.decisionStep) {
         decId = nodeId(seg.decisionStep);
-        lines.push(`  ${decId}{${dlbl(seg.decisionStep)}}`);
+        lines.push(`  ${decId}{${dlbl(seg.decisionStep)}}:::decision`);
       } else {
         decId = `dec${decCounter++}`;
-        lines.push(`  ${decId}{"　条件　"}`);
+        lines.push(`  ${decId}{"　条件　"}:::decision`);
       }
       if (prevLabel) {
         for (const p of prev) lines.push(`  ${p} -- "${esc(prevLabel)}" --> ${decId}`);
@@ -244,7 +248,7 @@ export function buildFlowchartDefinition(instruction: WorkInstruction): string {
     }
   }
 
-  lines.push('  END(["　終了　"])');
+  lines.push('  END(["　終了　"]):::terminal');
   if (prevLabel) {
     for (const p of prev) lines.push(`  ${p} -- "${esc(prevLabel)}" --> END`);
   } else {
@@ -255,7 +259,12 @@ export function buildFlowchartDefinition(instruction: WorkInstruction): string {
 }
 
 function buildLinear(steps: Step[]): string {
-  const lines: string[] = ['graph TD', '  START(["　開始　"])'];
+  const lines: string[] = [
+    'graph TD',
+    '  classDef terminal fill:#7EC8E3,stroke:#5BA3BC,color:#1a1a1a',
+    '  classDef decision fill:#FFE57A,stroke:#D4A017,color:#1a1a1a',
+    '  START(["　開始　"]):::terminal',
+  ];
   let prev = 'START';
   const stepIdMap = new Map<string, string>();
   steps.forEach((s, i) => stepIdMap.set(s.id, `s${i}`));
@@ -264,7 +273,7 @@ function buildLinear(steps: Step[]): string {
     const id = `s${i}`;
     const hasJumps = s.jumps && s.jumps.length > 0;
     if (hasJumps) {
-      lines.push(`  ${id}{"<br/>${esc(`${i + 1}. ${s.title}`)}<br/>"}`);
+      lines.push(`  ${id}{"<br/>${esc(`${i + 1}. ${s.title}`)}<br/>"}:::decision`);
     } else {
       lines.push(`  ${id}["${esc(`${i + 1}. ${s.title}`)}"]`);
     }
@@ -289,7 +298,7 @@ function buildLinear(steps: Step[]): string {
       prev = id;
     }
   });
-  lines.push('  END(["　終了　"])');
+  lines.push('  END(["　終了　"]):::terminal');
   if (prev !== '__skip__') {
     lines.push(`  ${prev} --> END`);
   }
